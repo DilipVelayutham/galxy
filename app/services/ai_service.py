@@ -10,6 +10,10 @@ from app.utils.cloudinary_helper import upload_to_cloudinary
 from app.models.ai_generation import AIGeneration
 
 def orchestrate_generation(category_id, product_id, selected_attributes, session_id, user_id, input_reference_image=None):
+    # Normalize selected_attributes keys alphabetically for deterministic DB matching
+    if isinstance(selected_attributes, dict):
+        selected_attributes = {k: selected_attributes[k] for k in sorted(selected_attributes.keys())}
+        
     # 1. Fetch category from DB
     try:
         cat_obj_id = ObjectId(category_id)

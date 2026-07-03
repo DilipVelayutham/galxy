@@ -27,6 +27,9 @@ def create_app(config_class=AIConfig):
     from app.routes.ai_routes import ai_blueprint
     app.register_blueprint(ai_blueprint)
     
+    from app.routes.admin_ai_routes import admin_ai_blueprint
+    app.register_blueprint(admin_ai_blueprint)
+    
     # Create indexes
     from app.models.ai_generation import AIGeneration
     try:

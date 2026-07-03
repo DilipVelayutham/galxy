@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 from app.configs.ai_config import AIConfig
 
@@ -9,10 +9,11 @@ def check_rate_limit(user_id, session_id):
         
         # 1. Authenticated User Rate Limiting (Daily Cap)
         if user_id:
-            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
             user_count = col.count_documents({
                 "user_id": ObjectId(user_id) if isinstance(user_id, str) else user_id,
                 "status": {"$in": ["success", "failed"]},
+                "generation_time_ms": {"$gt": 0},  # Exclude cache hits (time = 0)
                 "created_at": {"$gte": today_start}
             })
             
@@ -27,7 +28,8 @@ def check_rate_limit(user_id, session_id):
         elif session_id:
             session_count = col.count_documents({
                 "session_id": session_id,
-                "status": {"$in": ["success", "failed"]}
+                "status": {"$in": ["success", "failed"]},
+                "generation_time_ms": {"$gt": 0}  # Exclude cache hits (time = 0)
             })
             
             if session_count >= AIConfig.AI_FREE_GENERATIONS_PER_SESSION:

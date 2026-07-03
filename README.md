@@ -1,23 +1,27 @@
-# GALXY – Module 1: Authentication & User Accounts
+# GALXY - Module 1
 
-## Team
-- Team Lead: Dilip Velayutham
-- Naresh Kumar
-- Tharani Jayaprakash
-- Arun Kumar
+## Branch
+`in4-arun`
 
-## Tech Stack
-- Flask
-- MongoDB
-- JWT
-- bcrypt
-- Next.js
-- React
+## Owner
+**Arun Kumar**
+Admin Authentication, QA & Documentation
 
-## Branches
-- main → Stable template
-- dev → Development & integration
-- in1-dilip
-- in2-naresh
-- in3-tharani
-- in4-arun
+## Responsibilities
+
+### Backend
+- Admin Authentication
+- Admin Routes
+- Admin Service
+- Module Testing
+- Documentation
+
+### Frontend
+- Admin Login Page
+- Frontend Testing
+- Role Isolation Validation
+
+## Workflow
+Develop → Commit → Test → Pull Request to `dev`
+
+Ensure complete separation between customer and admin authentication.

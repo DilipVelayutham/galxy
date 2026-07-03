@@ -1,23 +1,64 @@
-# GALXY – Module 1: Authentication & User Accounts
+# GALXY - Module 1: Auth & User Accounts
+
+## Branch
+`dev`
+
+## Purpose
+
+This is the **integration branch** for Module 1.
+
+All completed work from individual intern branches must be merged into this branch after review by the Team Lead.
+
+---
 
 ## Team
-- Team Lead: Dilip Velayutham
-- Naresh Kumar
-- Tharani Jayaprakash
-- Arun Kumar
 
-## Tech Stack
-- Flask
-- MongoDB
-- JWT
-- bcrypt
-- Next.js
-- React
+| Intern | Branch | Responsibility |
+|---------|--------|----------------|
+| Dilip Velayutham (TL) | in1-dilip | Authentication Core & Integration |
+| Naresh Kumar | in2-naresh | User Profile & Address Management |
+| Tharani Jayaprakash | in3-tharani | Password Recovery & Validation |
+| Arun Kumar | in4-arun | Admin Authentication & Testing |
 
-## Branches
-- main → Stable template
-- dev → Development & integration
-- in1-dilip
-- in2-naresh
-- in3-tharani
-- in4-arun
+---
+
+## Workflow
+
+```
+Individual Branch
+        ↓
+Pull Request
+        ↓
+Team Lead Review
+        ↓
+Merge into dev
+        ↓
+Module Testing
+        ↓
+Merge into main
+```
+
+---
+
+## Rules
+
+- ❌ Never develop directly on `dev`
+- ❌ Never force push
+- ✅ Merge only after review
+- ✅ Keep `dev` stable
+
+---
+
+## Module Status
+
+- [ ] Authentication
+- [ ] Profile
+- [ ] Address
+- [ ] Password Reset
+- [ ] Admin Authentication
+- [ ] Testing
+- [ ] Documentation
+
+---
+
+**Maintained by:** Dilip Velayutham (Team Lead)

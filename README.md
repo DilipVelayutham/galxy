@@ -1,23 +1,28 @@
-# GALXY – Module 1: Authentication & User Accounts
+# GALXY - Module 1
 
-## Team
-- Team Lead: Dilip Velayutham
-- Naresh Kumar
-- Tharani Jayaprakash
-- Arun Kumar
+## Branch
+`in2-naresh`
 
-## Tech Stack
-- Flask
-- MongoDB
-- JWT
-- bcrypt
-- Next.js
-- React
+## Owner
+**Naresh Kumar**
+Profile & Address Developer
 
-## Branches
-- main → Stable template
-- dev → Development & integration
-- in1-dilip
-- in2-naresh
-- in3-tharani
-- in4-arun
+## Responsibilities
+
+### Backend
+- User Profile
+- Address CRUD
+- User Service
+- Address Service
+- User Model
+
+### Frontend
+- Profile Page
+- Address Page
+- AddressCard
+- AddressForm
+
+## Workflow
+Develop → Commit → Test → Pull Request to `dev`
+
+Use AuthGuard and shared validators provided by the module.

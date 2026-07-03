@@ -32,9 +32,10 @@ def create_app(config_class=AIConfig):
     
     # Create indexes
     from app.models.ai_generation import AIGeneration
-    try:
-        AIGeneration.create_indexes()
-    except Exception as e:
-        app.logger.warning(f"Could not create database indexes: {e}")
+    if not app.config.get("TESTING"):
+        try:
+            AIGeneration.create_indexes()
+        except Exception as e:
+            app.logger.warning(f"Could not create database indexes: {e}")
     
     return app

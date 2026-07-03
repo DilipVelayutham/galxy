@@ -30,6 +30,5 @@ def upload_to_cloudinary(image_bytes, folder="galxy/ai-previews/"):
         )
         return result.get("secure_url")
     except Exception as e:
-        import uuid
-        # Graceful fallback on upload exception during local test runs
-        return f"https://res.cloudinary.com/demo/image/upload/v1234567890/mock-error-fallback-{uuid.uuid4().hex}.png"
+        # Propagate the error so a failed upload doesn't result in a fake success URL
+        raise Exception(f"Cloudinary upload failed: {str(e)}")

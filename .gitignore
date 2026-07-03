@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.pytest_cache/
+.vscode/
+.idea/
+.DS_Store
+backend/.env
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/services/__pycache__/
+backend/app/routes/__pycache__/
+backend/app/models/__pycache__/
+backend/app/configs/__pycache__/
+backend/app/utils/__pycache__/

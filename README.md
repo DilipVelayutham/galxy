@@ -1,23 +1,31 @@
-# GALXY – Module 1: Authentication & User Accounts
+# GALXY - Module 1
 
-## Team
-- Team Lead: Dilip Velayutham
-- Naresh Kumar
-- Tharani Jayaprakash
-- Arun Kumar
+## Branch
+`in1-dilip`
 
-## Tech Stack
-- Flask
-- MongoDB
-- JWT
-- bcrypt
-- Next.js
-- React
+## Owner
+**Dilip Velayutham**
+Team Lead | Auth Architect | Integration Lead
 
-## Branches
-- main → Stable template
-- dev → Development & integration
-- in1-dilip
-- in2-naresh
-- in3-tharani
-- in4-arun
+## Responsibilities
+
+### Backend
+- Authentication (Signup, Login, Logout)
+- JWT & Refresh Token
+- Auth Middleware
+- Token Helper
+- Module Architecture
+- Integration & Code Review
+
+### Frontend
+- AuthContext
+- AuthGuard
+- AuthForm
+- Signup Page
+- Login Page
+- Session Management
+
+## Workflow
+Develop → Commit → Test → Merge into `dev`
+
+**Do not modify files owned by other members.**

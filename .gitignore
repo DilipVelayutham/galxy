@@ -83,3 +83,4 @@ uploads/
 
 # ---------- Cache ----------
 .cache/
+MongoDB Credentials.txt

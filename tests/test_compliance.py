@@ -101,3 +101,37 @@ class TestCompliance(unittest.TestCase):
         mock_get_col.return_value.count_documents.assert_called_once()
         query = mock_get_col.return_value.count_documents.call_args[0][0]
         self.assertEqual(query["generation_time_ms"], {"$gt": 0})
+
+    def test_caching_isolation_leak(self):
+        category_id = "66851234af504e44a4b8c771"
+        
+        # Request A: custom_text is 'Naveen'
+        selected_a = {"color": "blue", "font": "cursive", "custom_text": "Naveen"}
+        cache_res_a = check_cache(category_id, selected_a)
+        self.assertFalse(cache_res_a["hit"])
+        
+        # Request B: custom_text is 'Kumar'
+        selected_b = {"color": "blue", "font": "cursive", "custom_text": "Kumar"}
+        cache_res_b = check_cache(category_id, selected_b)
+        self.assertFalse(cache_res_b["hit"])
+
+    @patch("app.db")
+    @patch("app.services.ai_service.check_rate_limit")
+    @patch("app.models.ai_generation.AIGeneration.get_collection")
+    def test_error_payload_compliance(self, mock_get_col, mock_rate, mock_db):
+        mock_rate.return_value = {"allowed": False, "limit_reached": True, "limit_scope": "session"}
+        mock_db["categories"].find_one.return_value = {
+            "_id": ObjectId("66851234af504e44a4b8c771"),
+            "name": "Neon Sign",
+            "attributes": []
+        }
+        
+        r = self.client.post("/api/ai/generate-preview", json={
+            "category_id": "66851234af504e44a4b8c771",
+            "session_id": "test-session-uuid",
+            "selected_attributes": {}
+        })
+        
+        self.assertEqual(r.status_code, 429)
+        self.assertFalse(r.json["success"])
+        self.assertTrue(r.json["data"]["limit_reached"])

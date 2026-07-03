@@ -1,23 +1,27 @@
-# GALXY – Module 1: Authentication & User Accounts
+# GALXY - Module 1
 
-## Team
-- Team Lead: Dilip Velayutham
-- Naresh Kumar
-- Tharani Jayaprakash
-- Arun Kumar
+## Branch
+`in3-tharani`
 
-## Tech Stack
-- Flask
-- MongoDB
-- JWT
-- bcrypt
-- Next.js
-- React
+## Owner
+**Tharani Jayaprakash**
+Security & Password Recovery Developer
 
-## Branches
-- main → Stable template
-- dev → Development & integration
-- in1-dilip
-- in2-naresh
-- in3-tharani
-- in4-arun
+## Responsibilities
+
+### Backend
+- Password Helper
+- Validators
+- Forgot Password
+- Reset Password
+- SMTP Integration
+
+### Frontend
+- Forgot Password Page
+- Reset Password Page
+- Shared Validators Module
+
+## Workflow
+Develop → Commit → Test → Pull Request to `dev`
+
+Keep all password recovery flows secure and consistent.

@@ -4,31 +4,36 @@ def sanitize_custom_text(text):
     if not text:
         return ""
     
-    # Cap length at 100 characters to prevent excessive tokens/abuse
+    # 1. Cap length at 100 characters to prevent excessive tokens/abuse
     text = str(text)[:100]
     
-    # Remove HTML tags
+    # 2. Remove HTML tags
     text = re.sub(r'<[^>]*>', '', text)
     
-    # List of common prompt injection keywords (case-insensitive)
+    # 3. Strip excessive special characters / unicode walls (allow letters, numbers, spaces, parentheses, and safe safe punctuation: . , ! ? - ' " ( ))
+    text = re.sub(r'[^\w\s\.,!\?\'"\-\(\)]', '', text)
+    
+    # 4. Collapse consecutive repeating punctuation to a single instance (e.g. "!!!" -> "!", "???" -> "?")
+    text = re.sub(r'([\.,!\?\'"\-])\1+', r'\1', text)
+    
+    # 5. List of common prompt injection keywords and rephrasings (case-insensitive)
     injection_patterns = [
-        r"ignore\s+(?:all\s+)?previous\s+instructions",
-        r"ignore\s+(?:all\s+)?prior\s+instructions",
+        r"ignore\s+(?:all\s+)?(?:previous|prior|earlier)\s+instructions",
+        r"disregard\s+(?:all\s+)?(?:previous|prior|earlier)\s+directions",
         r"instead\s+of\s+generating",
         r"system\s+prompt",
         r"you\s+must\s+instead",
-        r"forget\s+(?:what\s+I\s+said|everything)",
+        r"forget\s+(?:what\s+I\s+said|everything|prior\s+rules)",
         r"dan\s+mode",
-        r"system\s+override"
+        r"system\s+override",
+        r"bypass\s+safety",
+        r"override\s+parameters"
     ]
     
     sanitized = text
     for pattern in injection_patterns:
         sanitized = re.sub(pattern, "", sanitized, flags=re.IGNORECASE)
-    
-    # Clean up characters that might interfere with prompts or templates
-    sanitized = re.sub(r'[\{\}\[\]\<\>]', '', sanitized)
-    
+        
     # Replace multiple spaces with a single space
     sanitized = re.sub(r'\s+', ' ', sanitized)
     

@@ -3,47 +3,21 @@ import os
 import requests
 import struct
 
-def generate_mock_image_bytes():
-    # Create a simple 200x200 solid blue BMP image (no third-party dependencies required)
-    width, height = 200, 200
-    row_size = (width * 3 + 3) & ~3
-    pixel_data_size = row_size * height
-    file_size = 54 + pixel_data_size
-    
-    header = struct.pack('<2sIHHI', b'BM', file_size, 0, 0, 54)
-    dib = struct.pack('<IiiHHIIiiII', 40, width, height, 1, 24, 0, pixel_data_size, 2835, 2835, 0, 0)
-    
-    pixels = bytearray()
-    for y in range(height):
-        row = bytearray()
-        for x in range(width):
-            row.extend([235, 128, 50])  # B, G, R (Cyan-ish blue)
-        while len(row) % 4 != 0:
-            row.append(0)
-        pixels.extend(row)
-        
-    return header + dib + bytes(pixels)
+class AIProviderAdapter:
+    def generate_image(self, prompt, input_reference_image=None) -> dict:
+        raise NotImplementedError("Subclasses must implement generate_image")
 
-def generate_image(prompt, input_reference_image=None):
-    provider = os.getenv("AI_PROVIDER", "gemini")
-    api_key = os.getenv("GEMINI_API_KEY")
-    
-    # If API key is missing or we are in mock mode, use local fallback
-    if not api_key:
-        return {
-            "success": True,
-            "image_bytes": generate_mock_image_bytes(),
-            "error": None
-        }
+class GeminiProviderAdapter(AIProviderAdapter):
+    def __init__(self, api_key):
+        self.api_key = api_key
         
-    if provider == "gemini":
+    def generate_image(self, prompt, input_reference_image=None) -> dict:
         try:
-            # Incorporate reference image context if present
             full_prompt = prompt
             if input_reference_image:
                 full_prompt = f"{prompt}. Reference image style/layout context: {input_reference_image}"
                 
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={self.api_key}"
             headers = {"Content-Type": "application/json"}
             payload = {
                 "instances": [{"prompt": full_prompt}],
@@ -98,9 +72,53 @@ def generate_image(prompt, input_reference_image=None):
                 "image_bytes": None,
                 "error": f"Unexpected provider error: {str(e)}"
             }
-    else:
+
+class MockProviderAdapter(AIProviderAdapter):
+    def generate_image(self, prompt, input_reference_image=None) -> dict:
+        # Create a simple 200x200 solid blue BMP image (no third-party dependencies required)
+        width, height = 200, 200
+        row_size = (width * 3 + 3) & ~3
+        pixel_data_size = row_size * height
+        file_size = 54 + pixel_data_size
+        
+        header = struct.pack('<2sIHHI', b'BM', file_size, 0, 0, 54)
+        dib = struct.pack('<IiiHHIIiiII', 40, width, height, 1, 24, 0, pixel_data_size, 2835, 2835, 0, 0)
+        
+        pixels = bytearray()
+        for y in range(height):
+            row = bytearray()
+            for x in range(width):
+                row.extend([235, 128, 50])  # B, G, R (Cyan-ish blue)
+            while len(row) % 4 != 0:
+                row.append(0)
+            pixels.extend(row)
+            
         return {
-            "success": False,
-            "image_bytes": None,
-            "error": f"Unsupported AI provider: {provider}"
+            "success": True,
+            "image_bytes": header + dib + bytes(pixels),
+            "error": None
         }
+
+def get_provider_adapter() -> AIProviderAdapter:
+    provider = os.getenv("AI_PROVIDER", "gemini")
+    api_key = os.getenv("GEMINI_API_KEY")
+    
+    # If API key is missing or mock is configured, return the Mock Adapter
+    if not api_key or provider == "mock":
+        return MockProviderAdapter()
+        
+    if provider == "gemini":
+        return GeminiProviderAdapter(api_key)
+        
+    class UnsupportedProviderAdapter(AIProviderAdapter):
+        def generate_image(self, prompt, input_reference_image=None) -> dict:
+            return {
+                "success": False,
+                "image_bytes": None,
+                "error": f"Unsupported AI provider: {provider}"
+            }
+    return UnsupportedProviderAdapter()
+
+def generate_image(prompt, input_reference_image=None) -> dict:
+    adapter = get_provider_adapter()
+    return adapter.generate_image(prompt, input_reference_image)

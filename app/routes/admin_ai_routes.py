@@ -12,11 +12,11 @@ def admin_required(f):
         # Admin authorization check
         # Inspect headers or auth token for admin privileges
         auth_header = request.headers.get("Authorization", "")
+        # Enforce strict mock token/role check (no loose substrings or query bypass allowed)
         is_admin_header = request.headers.get("X-Admin-Role") == "admin"
-        is_admin_token = auth_header == "AdminSecretToken" or "admin" in auth_header.lower()
-        is_bypass = request.args.get("admin_bypass") == "true"
+        is_admin_token = auth_header == "Bearer mock-admin-token-123"
         
-        if not (is_admin_header or is_admin_token or is_bypass):
+        if not (is_admin_header or is_admin_token):
             return jsonify({
                 "success": False,
                 "message": "Forbidden: Administrative privileges required"

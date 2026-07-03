@@ -15,18 +15,30 @@ class TestCompliance(unittest.TestCase):
         
     @patch("app.models.ai_generation.AIGeneration.get_collection")
     def test_admin_generations_auth(self, mock_get_col):
+        mock_get_col.return_value.find.return_value.sort.return_value.skip.return_value.limit.return_value = []
+        mock_get_col.return_value.count_documents.return_value = 0
+
         # 1. Test unauthorized request
         r = self.client.get("/api/admin/ai/generations")
         self.assertEqual(r.status_code, 403)
         
-        # 2. Test authorized request (by headers)
-        headers = {"X-Admin-Role": "admin"}
-        mock_get_col.return_value.find.return_value.sort.return_value.skip.return_value.limit.return_value = []
-        mock_get_col.return_value.count_documents.return_value = 0
-        
-        r = self.client.get("/api/admin/ai/generations", headers=headers)
-        self.assertEqual(r.status_code, 200)
-        self.assertTrue(r.json["success"])
+        # 2. Test bypass query parameters (EXPECT 403 FORBIDDEN - secure!)
+        r_bypass = self.client.get("/api/admin/ai/generations?admin_bypass=true")
+        self.assertEqual(r_bypass.status_code, 403)
+
+        # 3. Test loose substring authorization tokens (EXPECT 403 FORBIDDEN)
+        r_loose = self.client.get("/api/admin/ai/generations", headers={"Authorization": "Bearer administrator-token"})
+        self.assertEqual(r_loose.status_code, 403)
+
+        # 4. Test authorized request (by role header)
+        r_role = self.client.get("/api/admin/ai/generations", headers={"X-Admin-Role": "admin"})
+        self.assertEqual(r_role.status_code, 200)
+        self.assertTrue(r_role.json["success"])
+
+        # 5. Test authorized request (by exact secret token)
+        r_token = self.client.get("/api/admin/ai/generations", headers={"Authorization": "Bearer mock-admin-token-123"})
+        self.assertEqual(r_token.status_code, 200)
+        self.assertTrue(r_token.json["success"])
 
     @patch("app.models.ai_generation.AIGeneration.get_collection")
     def test_admin_generations_filtering(self, mock_get_col):

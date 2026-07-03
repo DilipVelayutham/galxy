@@ -1,16 +1,26 @@
 from flask import Blueprint, request, jsonify, g
 from app.services.ai_service import orchestrate_generation
 from functools import wraps
+from datetime import datetime
 
 ai_blueprint = Blueprint("ai", __name__)
 
 def optional_login(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # Support X-User-Id header or user_id in the JSON body for test runs/guest emulation
+        # NOTE: This is a placeholder mock authentication parser for testing/development.
+        # It relies on unsecured headers (X-User-Id) and JSON body fields to identify users.
+        # Before production deployment, this must be consolidated with the actual JWT-based 
+        # Auth Middleware (Module 1).
         g.user_id = request.headers.get("X-User-Id")
         if not g.user_id and request.is_json:
-            g.user_id = request.json.get("user_id")
+            try:
+                # Use silent=True to handle cases where request body might not be JSON or empty
+                body = request.get_json(silent=True)
+                if body:
+                    g.user_id = body.get("user_id")
+            except Exception:
+                pass
         return f(*args, **kwargs)
     return decorated
 
@@ -78,3 +88,81 @@ def generate_preview():
         response_body["data"] = result["data"]
         
     return jsonify(response_body), status_code
+
+@ai_blueprint.route("/api/ai/generations/<user_id>", methods=["GET"])
+@optional_login
+def get_user_generations(user_id):
+    # Enforce request.user._id matching (must match authenticated user_id in context or be admin)
+    auth_user_id = getattr(g, "user_id", None)
+    is_admin = request.headers.get("X-Admin-Role") == "admin" or request.headers.get("Authorization") == "Bearer mock-admin-token-123"
+    
+    if not auth_user_id and not is_admin:
+        return jsonify({
+            "success": False,
+            "message": "Unauthorized: Authentication required"
+        }), 401
+        
+    if auth_user_id != user_id and not is_admin:
+        return jsonify({
+            "success": False,
+            "message": "Forbidden: You do not have permission to view this user's design history."
+        }), 403
+        
+    # Pagination parameters
+    try:
+        page = int(request.args.get("page", 1))
+        limit = int(request.args.get("limit", 10))
+        if page < 1 or limit < 1:
+            raise ValueError()
+    except ValueError:
+        return jsonify({
+            "success": False,
+            "message": "Invalid page or limit parameters. Must be positive integers."
+        }), 400
+        
+    try:
+        from app.models.ai_generation import AIGeneration
+        from bson import ObjectId
+        
+        col = AIGeneration.get_collection()
+        skip = (page - 1) * limit
+        
+        query = {
+            "user_id": ObjectId(user_id) if isinstance(user_id, str) else user_id,
+            "status": "success"  # Show only successfully generated custom designs
+        }
+        
+        cursor = col.find(query).sort("created_at", -1).skip(skip).limit(limit)
+        total_records = col.count_documents(query)
+        
+        generations = []
+        for doc in cursor:
+            doc_copy = doc.copy()
+            doc_copy["_id"] = str(doc_copy["_id"])
+            doc_copy["user_id"] = str(doc_copy["user_id"])
+            if doc_copy.get("category_id"):
+                doc_copy["category_id"] = str(doc_copy["category_id"])
+            if doc_copy.get("product_id"):
+                doc_copy["product_id"] = str(doc_copy["product_id"])
+            if isinstance(doc_copy.get("created_at"), datetime):
+                doc_copy["created_at"] = doc_copy["created_at"].isoformat()
+            generations.append(doc_copy)
+            
+        return jsonify({
+            "success": True,
+            "data": {
+                "generations": generations,
+                "pagination": {
+                    "total": total_records,
+                    "page": page,
+                    "limit": limit,
+                    "pages": (total_records + limit - 1) // limit if total_records else 1
+                }
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Database error: {str(e)}"
+        }), 500

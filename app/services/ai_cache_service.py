@@ -21,7 +21,8 @@ def check_cache(category_id, selected_attributes):
         if match:
             return {"hit": True, "output_image_url": match.get("output_image_url")}
     except Exception:
-        # Avoid crashing the pipeline if the database is not ready
+        # Fail Open: If MongoDB is unavailable or errors, bypass caching and return no-hit
+        # to guarantee system availability over strict cost controls.
         pass
         
     return {"hit": False, "output_image_url": None}

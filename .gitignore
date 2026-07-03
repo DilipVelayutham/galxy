@@ -1,0 +1,85 @@
+# ==========================================
+# GALXY - Module 1
+# Flask + Next.js Monorepo
+# ==========================================
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# Python Build
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Flask
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# ---------- Environment ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Logs ----------
+logs/
+*.log
+
+# ---------- Testing ----------
+.pytest_cache/
+.coverage
+coverage/
+coverage.xml
+htmlcov/
+
+# ---------- Node ----------
+node_modules/
+.next/
+out/
+
+# Package Managers
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- IDE ----------
+.vscode/
+.idea/
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ---------- Temporary ----------
+*.tmp
+*.temp
+*.swp
+*.bak
+*.old
+
+# ---------- Secrets ----------
+*.pem
+*.key
+*.crt
+
+service-account.json
+cloudinary_credentials.json
+
+# ---------- Uploads ----------
+uploads/
+
+# ---------- Cache ----------
+.cache/

@@ -1,10 +1,13 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
 import json
 import unittest
 import unittest.mock
 import uuid
 import datetime
 from bson import ObjectId
-import os
 import mongomock
 
 # Set environment variables for testing before imports

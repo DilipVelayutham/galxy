@@ -1,0 +1,176 @@
+GALXY — Custom Lighting & Craft Studio
+Module 5 — AI Preview Generation
+Intern Submission Review & Completion Audit
+Reviewed against: Galxy_Module5_AI_Preview_Generation.docx (spec)
+Submission reviewed: module-5-ai-preview-generation-feat-m5-t1-core-prompt.zip
+Review date: July 3, 2026
+OVERALL COMPLETION ESTIMATE | ≈ 80% | Strong architectural fidelity to the spec, held back by one missing endpoint and one real security bug.
+OVERALL COMPLETION ESTIMATE
+≈ 80%
+Strong architectural fidelity to the spec, held back by one missing endpoint and one real security bug.
+1. Executive Summary
+This intern's implementation is a genuinely good-faith, close reading of the Module 5 spec. The core generation pipeline — validate → rate-limit → cache → build prompt → call provider → upload → log — is implemented in the exact order the spec describes, with correct status codes and correct handling of every branch (success, cache hit, rate-limited, provider failure/timeout). The MongoDB schema, indexes, folder layout, and environment variables all match the document closely.
+Two things need attention before this can be called done. First, the admin analytics endpoint has an authentication check that can be trivially bypassed (it accepts any Authorization header containing the substring "admin", and honors a plain ?admin_bypass=true query parameter). Second, the customer-facing GET /api/ai/generations/:user_id endpoint — explicitly required in Section 9 for the "your recent designs" panel — was not built at all. Beyond those two, the remaining gaps are smaller: the prompt-injection sanitizer is a narrow keyword list rather than the broader defense the spec implies, the provider layer isn't yet a true swappable adapter, and there's no route-level test proving the happy path actually works end-to-end through Flask.
+None of this suggests the intern didn't understand the spec — the opposite, actually. The mistakes are the kind that come from focusing hard on getting the domain logic right and treating auth/testing as an afterthought, which is a very normal thing for a first backend module. Recommend one more pass focused specifically on the Critical Issues below before merging.
+2. Completion Scorecard
+Each row reflects how closely the delivered code matches the corresponding section of the spec document, not just whether code exists.
+Spec Area | Status | Est. % | Notes
+Spec Area
+Status
+Est. %
+Notes
+ai_generations model & indexes | Done | 100% | Matches schema in Sec. 2.1 field-for-field; all four indexes created.
+ai_generations model & indexes
+Done
+100%
+Matches schema in Sec. 2.1 field-for-field; all four indexes created.
+Folder structure | Done | 95% | Matches Sec. 3 exactly. No module4_stub.py was specified, but it's a reasonable placeholder pending real Module 4 integration.
+Folder structure
+Done
+95%
+Matches Sec. 3 exactly. No module4_stub.py was specified, but it's a reasonable placeholder pending real Module 4 integration.
+Environment variables | Done | 100% | All five vars from Sec. 4 present and wired into ai_config.py.
+Environment variables
+Done
+100%
+All five vars from Sec. 4 present and wired into ai_config.py.
+Prompt builder | Mostly done | 80% | Placeholder resolution, option→label mapping, affects_ai_preview filtering and cleanup all correct. Injection sanitization is a narrow keyword denylist, not the 'excessive special characters' stripping the spec also asks for.
+Prompt builder
+Mostly done
+80%
+Placeholder resolution, option→label mapping, affects_ai_preview filtering and cleanup all correct. Injection sanitization is a narrow keyword denylist, not the 'excessive special characters' stripping the spec also asks for.
+Generation orchestration (ai_service.py) | Done | 95% | Sequence matches Sec. 6 exactly: validate → rate-limit → cache → prompt → provider → upload → log, with correct status/error handling on every branch.
+Generation orchestration (ai_service.py)
+Done
+95%
+Sequence matches Sec. 6 exactly: validate → rate-limit → cache → prompt → provider → upload → log, with correct status/error handling on every branch.
+Caching strategy | Done | 90% | Deterministic sorted-key matching, correctly bypassed only when custom_text present. store_cache() is a no-op — works today because AIGeneration IS the cache store, but the split module suggests a different original design.
+Caching strategy
+Done
+90%
+Deterministic sorted-key matching, correctly bypassed only when custom_text present. store_cache() is a no-op — works today because AIGeneration IS the cache store, but the split module suggests a different original design.
+Rate limiting | Done | 90% | Guest/session vs. logged-in/daily tiers implemented; cache hits correctly excluded via generation_time_ms > 0.
+Rate limiting
+Done
+90%
+Guest/session vs. logged-in/daily tiers implemented; cache hits correctly excluded via generation_time_ms > 0.
+POST /api/ai/generate-preview | Done | 90% | Correct status codes (400/429/504/502/200); response shape matches the frozen contract in Sec. 12.
+POST /api/ai/generate-preview
+Done
+90%
+Correct status codes (400/429/504/502/200); response shape matches the frozen contract in Sec. 12.
+GET /api/ai/generations/:user_id | Missing | 0% | Not implemented anywhere in routes/. This is an explicit Sec. 9 deliverable ('your recent designs' panel depends on it).
+GET /api/ai/generations/:user_id
+Missing
+0%
+Not implemented anywhere in routes/. This is an explicit Sec. 9 deliverable ('your recent designs' panel depends on it).
+GET /api/admin/ai/generations | Done, but insecure | 70% | Filtering/pagination logic is solid, but the admin_required check has a serious bypass — see Critical Issues.
+GET /api/admin/ai/generations
+Done, but insecure
+70%
+Filtering/pagination logic is solid, but the admin_required check has a serious bypass — see Critical Issues.
+PUT /admin/categories/:id/ai-prompt-template | Correctly out of scope | N/A | Per Sec. 9's own note, this belongs to Module 2. Rightly not built here — no action needed, just confirm the flag was actually raised to the Module 2 TL.
+PUT /admin/categories/:id/ai-prompt-template
+Correctly out of scope
+N/A
+Per Sec. 9's own note, this belongs to Module 2. Rightly not built here — no action needed, just confirm the flag was actually raised to the Module 2 TL.
+Cloudinary integration | Done | 90% | Correct target folder, graceful mock fallback for local dev. Still a module-local wrapper, not yet the shared helper the doc asks to flag for consolidation.
+Cloudinary integration
+Done
+90%
+Correct target folder, graceful mock fallback for local dev. Still a module-local wrapper, not yet the shared helper the doc asks to flag for consolidation.
+Provider swappability | Partial | 60% | AI_PROVIDER is read, but there's one function with an if/else rather than the 'one function per provider' adapter pattern Sec. 4 asks for. Works today, will need refactor before a second provider is added.
+Provider swappability
+Partial
+60%
+AI_PROVIDER is read, but there's one function with an if/else rather than the 'one function per provider' adapter pattern Sec. 4 asks for. Works today, will need refactor before a second provider is added.
+Automated tests | Partial | 75% | Good unit coverage of prompt builder, caching, rate limiting, and orchestration branches. No test exercises the success path through the actual Flask route, and no test catches the admin-auth bypass.
+Automated tests
+Partial
+75%
+Good unit coverage of prompt builder, caching, rate limiting, and orchestration branches. No test exercises the success path through the actual Flask route, and no test catches the admin-auth bypass.
+
+3. What Was Done Well
+The orchestration sequence in ai_service.py follows Section 6 of the spec step-for-step, including the subtle rule that a broken selection should never consume an AI call (validation happens before the rate-limit check).
+Cache-hit records still get generation_time_ms: 0 and a freshly-built prompt_used, exactly as Section 6, step 4 specifies — many implementations would skip re-deriving the prompt on a cache hit.
+The custom_text cache-bypass rule (Section 7) is implemented correctly and is explicitly covered by test_caching_isolation_leak — a genuinely important edge case to have caught.
+Error responses never leak raw provider text to the client (Section 6, step 8) — provider errors are logged internally but returned to the caller as a generic message.
+affects_ai_preview: false attributes are correctly excluded from the prompt, and missing placeholders clean up to proper punctuation rather than leaving literal {key} text — both explicitly called out in Section 5 and both correctly handled.
+Rate limiting correctly excludes cache hits from quota consumption (Section 8), verified by its own test.
+4. Critical Issues — Fix Before Merge
+4.1 Admin authentication can be trivially bypassed  CRITICAL
+app/routes/admin_ai_routes.py — admin_required()
+admin_required() in admin_ai_routes.py grants access if the Authorization header simply contains the substring "admin" anywhere (case-insensitive) — a token like "Bearer administrator-token" or even "i-am-not-admin" would pass. Worse, it also honors a plain query string flag, ?admin_bypass=true, with no secret or check attached — anyone who reads the source (or guesses) can hit /api/admin/ai/generations and see the full generation history, including other users' prompts and selected_attributes. This needs to be replaced with a real role check against the actual auth/session system before this route goes anywhere near production.
+4.2 GET /api/ai/generations/:user_id is missing entirely  CRITICAL
+Expected in: app/routes/ai_routes.py (not present)
+Section 9 of the spec calls this out as a required contract endpoint, powering the "your recent designs" panel so customers can revisit past previews without regenerating. There is no route, no handler, and no test for it anywhere in the submission. This is a straightforward addition — same shape as the admin list route, filtered by user_id and with the request.user._id match check the spec requires — but it currently doesn't exist.
+5. Moderate Issues — Should Fix Soon
+5.1 No real authentication anywhere in this module  MODERATE
+app/routes/ai_routes.py — optional_login()
+optional_login() in ai_routes.py takes user_id from a plain X-User-Id header or the JSON body, with no signature, session, or token verification. Anyone can claim to be any user_id, which defeats the per-user daily rate limit and would defeat the (currently missing) per-user history endpoint's auth check too. This may be intentional as a stand-in until a real auth module is wired in — if so, that assumption should be written down explicitly in the code and the handoff notes, not left implicit.
+5.2 Provider integration may not actually be free-tier Gemini  MODERATE
+app/services/ai_provider_client.py — generate_image()
+The spec's tech stack (Section 0) specifically says "Gemini (free-tier)." The code calls Google's imagen-3.0-generate-002:predict endpoint, which is typically a billed Vertex AI capability rather than something available on the Gemini API free tier. Worth a quick verification with whoever owns the Gemini API key before this is relied on — if it turns out to require billing, this may need to switch to one of Gemini's native multimodal image-generation models instead.
+5.3 Provider layer isn't the adapter pattern the spec asks for  MODERATE
+app/services/ai_provider_client.py
+Section 4 explicitly asks for AI_PROVIDER to be "genuinely swappable (an interface/adapter pattern with one function per provider)." Today generate_image() is a single function with an if/else on provider, and the mock/fallback path is embedded in the same function rather than being its own adapter. It works fine with one provider, but adding a second (say, as a fallback when Gemini's free tier is exhausted) will mean restructuring rather than just adding a file — worth doing now while there's only one provider to migrate.
+5.4 Prompt-injection sanitization is a narrow denylist  MODERATE
+app/services/prompt_builder_service.py — sanitize_custom_text()
+sanitize_custom_text() strips eight specific hardcoded phrases ("ignore previous instructions", "dan mode", etc.) and template-breaking characters. That covers the exact examples in the tests, but the spec also asks to strip "excessive special characters," which isn't handled — e.g. a string of 50 exclamation marks or a wall of Unicode passes through untouched. A denylist of this kind is also easy to route around by rephrasing ("disregard the above," "new instructions:"). This is fine as a first pass but shouldn't be treated as real prompt-injection protection.
+6. Minor Issues / Polish
+ai_cache_service.store_cache() is a no-op with a comment explaining the log table doubles as the cache — reasonable, but a dead function with an unused signature is confusing for the next reader. Either delete it or have callers stop pretending it does something.
+The success response includes an extra generation_id field not mentioned in the Section 12 frozen contract. Harmless, but Module 6/8 should be told it's there (or it should be removed) so nobody accidentally starts depending on an undocumented field.
+Cloudinary upload logic lives in this module's own app/utils/cloudinary_helper.py, which the spec (Section 10) flags for eventual consolidation with Modules 3/10. Fine for now — just make sure that flag actually gets raised, not just written in the doc.
+Rate-limit and cache checks fail open on a MongoDB error (rate limiter) versus fail to "not cached" (cache service) — both reasonable individually, but it's worth a one-line comment confirming this is a deliberate choice for availability over strictness, since a reviewer six months from now won't know it was intentional.
+7. File-by-File Notes
+File | Verdict
+File
+Verdict
+app/models/ai_generation.py | Clean, matches schema exactly. No issues.
+app/models/ai_generation.py
+Clean, matches schema exactly. No issues.
+app/configs/ai_config.py | All required env vars present; sensible defaults for local dev.
+app/configs/ai_config.py
+All required env vars present; sensible defaults for local dev.
+app/services/prompt_builder_service.py | Solid placeholder logic and option-label mapping. sanitize_custom_text() only strips a short hardcoded phrase list — easy to get around by rephrasing (e.g. 'disregard earlier directions').
+app/services/prompt_builder_service.py
+Solid placeholder logic and option-label mapping. sanitize_custom_text() only strips a short hardcoded phrase list — easy to get around by rephrasing (e.g. 'disregard earlier directions').
+app/services/ai_cache_service.py | Correct semantics. store_cache() is a dead stub — fine functionally but confusing for the next person maintaining it; either remove it or make it actually do something.
+app/services/ai_cache_service.py
+Correct semantics. store_cache() is a dead stub — fine functionally but confusing for the next person maintaining it; either remove it or make it actually do something.
+app/services/ai_rate_limit_service.py | Correct two-tier logic; fails open on DB error, which is a reasonable choice for a non-critical gate but should be a conscious, documented decision, not an implicit one.
+app/services/ai_rate_limit_service.py
+Correct two-tier logic; fails open on DB error, which is a reasonable choice for a non-critical gate but should be a conscious, documented decision, not an implicit one.
+app/services/ai_service.py | The heart of the module — sequencing, logging, and error mapping all match the spec closely. Best-implemented file in the codebase.
+app/services/ai_service.py
+The heart of the module — sequencing, logging, and error mapping all match the spec closely. Best-implemented file in the codebase.
+app/services/ai_provider_client.py | Calls Google's Imagen 3 predict endpoint. Worth double-checking with the team: Imagen 3 typically needs a billed Vertex AI / paid project, not the Gemini free tier the doc specifies (Sec. 0, 'Gemini free-tier'). If free-tier image generation is required, this may need to point at a Gemini multimodal image-generation model instead.
+app/services/ai_provider_client.py
+Calls Google's Imagen 3 predict endpoint. Worth double-checking with the team: Imagen 3 typically needs a billed Vertex AI / paid project, not the Gemini free tier the doc specifies (Sec. 0, 'Gemini free-tier'). If free-tier image generation is required, this may need to point at a Gemini multimodal image-generation model instead.
+app/routes/ai_routes.py | Good input validation and error shaping. optional_login trusts a raw X-User-Id header / body field with no signature or session check — fine as a placeholder, but flag clearly that this is NOT real auth before anything ships.
+app/routes/ai_routes.py
+Good input validation and error shaping. optional_login trusts a raw X-User-Id header / body field with no signature or session check — fine as a placeholder, but flag clearly that this is NOT real auth before anything ships.
+app/routes/admin_ai_routes.py | Filtering, pagination, and date parsing are all well done. admin_required has a critical bypass — see Critical Issues below.
+app/routes/admin_ai_routes.py
+Filtering, pagination, and date parsing are all well done. admin_required has a critical bypass — see Critical Issues below.
+app/utils/cloudinary_helper.py | Clean, with a sensible mock-URL fallback for environments without Cloudinary keys.
+app/utils/cloudinary_helper.py
+Clean, with a sensible mock-URL fallback for environments without Cloudinary keys.
+seed_categories.py / tests/* | Good-quality seed data and unit tests; see Test Coverage section for gaps.
+seed_categories.py / tests/*
+Good-quality seed data and unit tests; see Test Coverage section for gaps.
+
+8. Test Coverage
+test_prompt_builder.py, test_ai_service.py, and test_compliance.py together give reasonable unit coverage of the interesting logic: placeholder resolution, affects_ai_preview filtering, sanitization, cache-key determinism, rate-limit exemption for cache hits, and the main orchestration branches (success, cache hit, rate-limited).
+Two gaps stand out:
+No test drives POST /api/ai/generate-preview through the actual Flask test client on the success path — test_error_payload_compliance only exercises the 429 branch through the route. Everything else is tested at the service layer, which is good but doesn't prove the route wiring (JSON parsing, status code passthrough, response shaping) is correct end to end.
+No test exists for the admin_required bypass described in Section 4.1 — the existing test_admin_generations_auth only checks the exact-match "X-Admin-Role: admin" header, not the substring match or admin_bypass query param, so the vulnerability wouldn't be caught by CI even after being flagged.
+9. Recommended Next Steps, in Priority Order
+Fix admin_required() to check against a real role/claim rather than substring matching or a query-string bypass.
+Implement GET /api/ai/generations/:user_id per Section 9, with the request.user._id match check the spec requires, plus a test covering it.
+Confirm with the team whether the Imagen 3 endpoint actually works on the Gemini free tier being budgeted for this project.
+Add a route-level success test for POST /api/ai/generate-preview.
+Document (in code comments or the handoff notes) that optional_login is a placeholder, not real auth, so it doesn't get treated as done.
+When time allows: refactor ai_provider_client.py into a real per-provider adapter, and broaden sanitize_custom_text() to also collapse runs of special characters.
+10. Bottom Line
+This is a solid intern submission — the parts that require actually understanding the domain (prompt building, caching semantics, rate-limit tiers, the exact orchestration order) are done carefully and correctly, which is the harder half of this module. The parts that are missing or weak (auth, one endpoint, defensive sanitization) are the more mechanical half, and are quick to fix with direct feedback. Recommend sending back with the two Critical Issues called out explicitly, then a quick re-review rather than a full re-audit.

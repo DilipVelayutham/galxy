@@ -24,6 +24,14 @@ def init_db(app=None):
         import mongomock
         client = mongomock.MongoClient()
         db = client[db_name]
+        # Auto-seed mock database if not in unit tests
+        if not (app and app.config.get('TESTING')):
+            try:
+                from app.seed import seed_db
+                print("db.py: Auto-seeding mock database...", file=sys.stderr)
+                seed_db()
+            except Exception as se:
+                print(f"db.py: Failed to auto-seed: {se}", file=sys.stderr)
         return db
 
     try:
@@ -38,6 +46,14 @@ def init_db(app=None):
         import mongomock
         client = mongomock.MongoClient()
         db = client[db_name]
+        # Auto-seed mock database if not in unit tests
+        if not (app and app.config.get('TESTING')):
+            try:
+                from app.seed import seed_db
+                print("db.py: Auto-seeding mock database...", file=sys.stderr)
+                seed_db()
+            except Exception as se:
+                print(f"db.py: Failed to auto-seed: {se}", file=sys.stderr)
         
     return db
 

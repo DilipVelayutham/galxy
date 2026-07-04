@@ -1,0 +1,21 @@
+GALXY — MODULE 5 EXECUTION PLAN
+v5 — 2 Backend / 2 Frontend Split
+Frontend Member 2 · AIGenerationHistory
+Frontend Member 2 — AIGenerationHistory
+Owner: Mohammed
+Component: AIGenerationHistory
+Lives On: Product detail page (customer-facing "your recent designs" strip)
+What It Does
+A simple horizontal scroll of the shopper's past AI preview thumbnails. Clicking a thumbnail restores that exact configuration back into the configurator.
+Behavior Spec
+Fetch past generations from GET /api/ai/generations/:user_id (Backend Member 2's endpoint), paginated and date-descending.
+Render each entry as a thumbnail using output_image_url, in a horizontal scroll strip — default page size should stay small enough for a scroll strip, not a dense table.
+Click-to-restore: on click, use the entry's product_id, category_id, and selected_attributes to re-hydrate the configurator to that exact past state — no need to re-fetch or guess at values.
+Works for both cache-hit and freshly-generated entries — they're indistinguishable in history, so no special-casing needed on the frontend.
+Backend Dependencies
+GET /api/ai/generations/:user_id  each entry includes:    _id, product_id, category_id, selected_attributes,    output_image_url, created_at  auth-gated: requester must own user_id or be an admin  paginated, date-descending
+Handoff Notes
+Watch out: Confirm with Backend Member 2 that the default page size is tuned for a scroll strip (a handful of recent items) rather than a full admin table — if it isn't, ask for a query param default rather than hardcoding a limit on your end.
+Watch out: This same endpoint may later back a full "view all" account page — build your fetch logic to already support pagination cleanly, even if the current UI only shows the first page.
+
+Source: Galxy_Frontend_Detail_All_Modules.docx (Module 5 — AIGenerationHistory), reconciled against Backend Member 2's contract.

@@ -1,0 +1,7 @@
+flask
+pymongo
+dnspython
+PyJWT
+python-dotenv
+pytest
+mongomock

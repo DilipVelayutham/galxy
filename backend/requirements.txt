@@ -8,3 +8,5 @@ Pillow==10.4.0
 requests==2.32.3
 python-jose==3.3.0
 gunicorn==22.0.0
+dnspython>=2.0.0
+mongomock>=4.3.0

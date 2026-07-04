@@ -1,27 +1,17 @@
-"""
-seed_categories.py — Module 5 DB seed script
-Creates sample category documents with ai_prompt_template for local testing.
-
-Run: python seed_categories.py
-Requires MONGO_URI in .env.
-"""
 import os
 import pymongo
 from dotenv import load_dotenv
-from datetime import datetime, timezone
 
 # Load environment variables
 load_dotenv()
 
-# Attempt to import app-specific helpers, but design fallbacks if they are not available or raise SyntaxError due to other conflicts
-try:
-    from app.db import get_db
-    from app.models.ai_generation import ensure_indexes
-    has_app = True
-except Exception:
-    has_app = False
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://lti_platform:open123%21%40%23@ltiplat.hf8dbrx.mongodb.net/?appName=ltiplat")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "lti_hub_db")
 
-# We combine the category schemas to be compatible with both attribute_schema and attributes
+client = pymongo.MongoClient(MONGO_URI)
+db = client[MONGO_DB_NAME]
+categories = db["m5_categories"]
+
 mock_categories = [
     {
         "category_id": "custom_apparels",
@@ -66,7 +56,7 @@ mock_categories = [
                 "label": "Fabric Weight",
                 "type": "select",
                 "required": False,
-                "affects_ai_preview": False,
+                "affects_ai_preview": False,  # Excluded from prompt building
                 "display_order": 3,
                 "options": [
                     {"value": "standard", "label": "Standard Cotton (180 GSM)", "price_delta": 0},
@@ -78,7 +68,7 @@ mock_categories = [
                 "label": "Size",
                 "type": "select",
                 "required": True,
-                "affects_ai_preview": False,
+                "affects_ai_preview": False,  # Excluded from prompt building
                 "display_order": 4,
                 "options": [
                     {"value": "s", "label": "Small", "price_delta": 0},
@@ -94,7 +84,7 @@ mock_categories = [
                 "required": True,
                 "affects_ai_preview": True,
                 "display_order": 5,
-                "options": []
+                "options": []  # Free text input
             }
         ]
     },
@@ -217,211 +207,25 @@ mock_categories = [
                 "options": []
             }
         ]
-    },
-    {
-        "name": "Neon Sign",
-        "slug": "neon-sign",
-        "ai_prompt_template": (
-            'A realistic professional product photo of a custom Neon Sign spelling '
-            '"{custom_text}", in {color} color, {font} font style, '
-            "{chain} hanging chain, mounted on a dark background with soft "
-            "ambient glow, studio lighting, high detail, no watermark, no text overlay"
-        ),
-        "attributes": [
-            {
-                "key": "custom_text",
-                "label": "Custom Text",
-                "type": "text_input",
-                "required": True,
-                "affects_ai_preview": True,
-            },
-            {
-                "key": "color",
-                "label": "Neon Color",
-                "type": "option",
-                "required": True,
-                "affects_ai_preview": True,
-                "options": [
-                    {"value": "blue", "label": "Blue"},
-                    {"value": "red", "label": "Red"},
-                    {"value": "warm_white", "label": "Warm White"},
-                    {"value": "pink", "label": "Pink"},
-                    {"value": "green", "label": "Green"},
-                ],
-            },
-            {
-                "key": "font",
-                "label": "Font Style",
-                "type": "option",
-                "required": True,
-                "affects_ai_preview": True,
-                "options": [
-                    {"value": "cursive_v2", "label": "Cursive"},
-                    {"value": "bold_v1", "label": "Bold"},
-                    {"value": "script_v3", "label": "Script"},
-                    {"value": "serif_v1", "label": "Serif"},
-                ],
-            },
-            {
-                "key": "chain",
-                "label": "Hanging Chain",
-                "type": "option",
-                "required": False,
-                "affects_ai_preview": True,
-                "options": [
-                    {"value": "with_chain", "label": "with"},
-                    {"value": "no_chain", "label": "without"},
-                ],
-            },
-            {
-                "key": "sku_ref",
-                "label": "Internal SKU",
-                "type": "option",
-                "required": False,
-                "affects_ai_preview": False,
-                "options": [{"value": "NS-001", "label": "NS-001"}],
-            },
-        ]
-    },
-    {
-        "name": "LED Letter Sign",
-        "slug": "led-letter-sign",
-        "ai_prompt_template": (
-            "A high-quality studio photograph of a {size} LED letter sign "
-            "with {finish} finish, lit in {color} light, placed on a "
-            "minimalist white shelf, product photography style"
-        ),
-        "attributes": [
-            {
-                "key": "size",
-                "label": "Size",
-                "type": "option",
-                "required": True,
-                "affects_ai_preview": True,
-                "options": [
-                    {"value": "small_30cm", "label": "small (30cm)"},
-                    {"value": "medium_60cm", "label": "medium (60cm)"},
-                    {"value": "large_90cm", "label": "large (90cm)"},
-                ],
-            },
-            {
-                "key": "finish",
-                "label": "Finish",
-                "type": "option",
-                "required": True,
-                "affects_ai_preview": True,
-                "options": [
-                    {"value": "matte_black", "label": "matte black"},
-                    {"value": "chrome", "label": "chrome"},
-                    {"value": "rose_gold", "label": "rose gold"},
-                ],
-            },
-            {
-                "key": "color",
-                "label": "LED Color",
-                "type": "option",
-                "required": True,
-                "affects_ai_preview": True,
-                "options": [
-                    {"value": "warm_white", "label": "warm white"},
-                    {"value": "cool_white", "label": "cool white"},
-                    {"value": "rgb_multi", "label": "multicolor RGB"},
-                ],
-            },
-        ]
     }
 ]
 
-def normalize_categories(cats):
-    normalized = []
-    for cat in cats:
-        c = cat.copy()
-        
-        # Ensure category_id exists
-        if "category_id" not in c:
-            c["category_id"] = c.get("slug", "").replace("-", "_")
-            
-        # Ensure slug exists
-        if "slug" not in c:
-            c["slug"] = c.get("category_id", "").replace("_", "-")
-            
-        # Synchronize attribute_schema and attributes
-        if "attribute_schema" in c and "attributes" not in c:
-            c["attributes"] = c["attribute_schema"]
-        elif "attributes" in c and "attribute_schema" not in c:
-            c["attribute_schema"] = c["attributes"]
-            
-        # Ensure display_order
-        if "display_order" not in c:
-            c["display_order"] = 99
-            
-        # Ensure is_active
-        if "is_active" not in c:
-            c["is_active"] = True
-            
-        # Ensure description, cover_image, banner_image
-        if "description" not in c:
-            c["description"] = f"Design custom {c['name'].lower()} online."
-        if "cover_image" not in c:
-            c["cover_image"] = "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d"
-        if "banner_image" not in c:
-            c["banner_image"] = "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d"
-            
-        # Ensure created_at
-        c["created_at"] = datetime.now(timezone.utc)
-        
-        normalized.append(c)
-    return normalized
-
 def seed():
-    mongo_uri = os.getenv("MONGO_URI", "mongodb+srv://lti_platform:open123%21%40%23@ltiplat.hf8dbrx.mongodb.net/?appName=ltiplat")
-    mongo_db_name = os.getenv("MONGO_DB_NAME", "lti_hub_db")
-    
-    db = None
-    if has_app:
-        try:
-            db = get_db()
-            print("Successfully retrieved database connection via app.db.get_db()")
-        except Exception as e:
-            print(f"Failed to use app.db.get_db(): {e}")
-            
-    if db is None:
-        try:
-            client = pymongo.MongoClient(mongo_uri)
-            db = client[mongo_db_name]
-            print(f"Connected directly to database: '{mongo_db_name}'")
-        except Exception as e:
-            print(f"Failed to connect to database directly: {e}")
-            return
-            
-    # Seed both collection names to ensure compatibility with whichever collections the schemas query
-    collections = [db["m5_categories"], db["categories"]]
-    normalized_cats = normalize_categories(mock_categories)
-    
-    for col in collections:
-        print(f"Seeding collection '{col.name}'...")
-        count = 0
-        for cat in normalized_cats:
-            res = col.update_one(
-                {"slug": cat["slug"]},
-                {"$set": cat},
-                upsert=True
-            )
-            if res.upserted_id:
-                print(f"  Created: {cat['name']} (Slug: {cat['slug']})")
-            else:
-                print(f"  Updated: {cat['name']} (Slug: {cat['slug']})")
-            count += 1
-        print(f"Seeding collection '{col.name}' completed. {count} categories written.")
-        
-    if has_app:
-        try:
-            ensure_indexes()
-            print("Successfully ensured database indexes.")
-        except Exception as e:
-            print(f"Could not ensure indexes: {e}")
+    print(f"Connecting to database: '{MONGO_DB_NAME}'...")
+    count = 0
+    for cat in mock_categories:
+        # Upsert category based on category_id
+        res = categories.update_one(
+            {"category_id": cat["category_id"]},
+            {"$set": cat},
+            upsert=True
+        )
+        if res.upserted_id:
+            print(f"Created category: {cat['name']} (ID: {cat['category_id']})")
+        else:
+            print(f"Updated category: {cat['name']} (ID: {cat['category_id']})")
+        count += 1
+    print(f"Seeding completed successfully. {count} categories written.")
 
 if __name__ == "__main__":
-    print("Seeding Module 5 database data...")
     seed()
-    print("Done.")

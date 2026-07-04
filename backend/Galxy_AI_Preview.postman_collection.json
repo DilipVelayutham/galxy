@@ -1,0 +1,238 @@
+{
+  "info": {
+    "_postman_id": "a9df44b4-d558-48b4-82ee-b55239df0510",
+    "name": "Galxy AI Preview Generation API",
+    "description": "Integration test suite for Galxy Module 5 AI Preview Generation",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. GET API Status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            ""
+          ]
+        },
+        "description": "Gets backend online status and list of endpoints."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Generate Preview (Success)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category_id\": \"{{category_id}}\",\n  \"selected_attributes\": {\n    \"style\": \"tshirt\",\n    \"color\": \"black\",\n    \"custom_text\": \"LTI Hub\"\n  },\n  \"session_id\": \"781935f4-fda0-44ab-ac15-9338d4e2f744\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/ai/generate-preview",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "ai",
+            "generate-preview"
+          ]
+        },
+        "description": "Successfully generates an AI-rendered preview."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Generate Preview (Validation Fail)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category_id\": \"{{category_id}}\",\n  \"selected_attributes\": {\n    \"style\": \"jeans\",\n    \"color\": \"black\",\n    \"custom_text\": \"LTI Hub\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/ai/generate-preview",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "ai",
+            "generate-preview"
+          ]
+        },
+        "description": "Triggers validation error (400) because style 'jeans' is not valid for this category."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Generate Preview (Cache Test)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category_id\": \"{{category_id}}\",\n  \"selected_attributes\": {\n    \"style\": \"tshirt\",\n    \"color\": \"black\"\n  },\n  \"session_id\": \"e0b8a1c9-3a3c-41c9-8dcf-d872b7a421b0\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/ai/generate-preview",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "ai",
+            "generate-preview"
+          ]
+        },
+        "description": "Test cache hit mechanics (first call will Miss, second identical call will Hit and return from_cache = true)."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Get User History (Success)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "user_12345",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/ai/generations/user_12345",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "ai",
+            "generations",
+            "user_12345"
+          ]
+        },
+        "description": "Retrieves authorized history for user_12345."
+      },
+      "response": []
+    },
+    {
+      "name": "6. Get User History (Unauthorized)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "wrong_user_id",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/ai/generations/user_12345",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "ai",
+            "generations",
+            "user_12345"
+          ]
+        },
+        "description": "Triggers 403 Access Denied because X-User-Id header does not match user_id in the route."
+      },
+      "response": []
+    },
+    {
+      "name": "7. Admin Get Generations (Success)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-User-Role",
+            "value": "admin",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/admin/ai/generations?limit=5",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "ai",
+            "generations"
+          ],
+          "query": [
+            {
+              "key": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "description": "Authorized admin query with cursor pagination metadata."
+      },
+      "response": []
+    },
+    {
+      "name": "8. Admin Get Generations (Unauthorized)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/admin/ai/generations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "ai",
+            "generations"
+          ]
+        },
+        "description": "Triggers 403 Forbidden because admin credentials are missing in headers."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:5000",
+      "type": "string"
+    },
+    {
+      "key": "category_id",
+      "value": "test_custom_apparels",
+      "type": "string"
+    }
+  ]
+}

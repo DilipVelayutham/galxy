@@ -46,6 +46,6 @@ CORS policies are configured using Flask-CORS to reject unauthorized domains:
 ## 5. Session Token Security
 
 - **JWT Signing**: Signed with a cryptographically secure key `JWT_SECRET` using the `HS256` HMAC algorithm.
-- **Claim Isolation**: Access and refresh tokens are distinguished via a `"type"` claim. Access tokens are rejected at the `/refresh` endpoint, and refresh tokens are blocked at API endpoints requiring Bearer access.
+- **Claim Isolation & Middleware Enforcement**: Access and refresh tokens are distinguished via a `"type"` claim. Access tokens are rejected at the `/refresh` endpoint (handled by `AuthService` and `AdminAuthService`). Crucially, the `@require_auth` and `@require_admin` middleware decorators explicitly verify that the bearer token possesses a `"type": "access"` claim, rejecting any refresh tokens presented as Bearer authorization credentials. This is verified by the regression test `test_refresh_token_rejected_by_middleware`, which asserts that both customer and admin refresh tokens fail middleware authentication with a 401 response.
 - **Client Session Isolation**: Customer tokens are held in-memory via the customer `AuthContext`. Admin tokens are held in a separate `AdminAuthContext`. Admin tokens are never stored in `sessionStorage` or `localStorage`, neutralizing the threat of persistent XSS token theft.
 - **Role Isolation**: Admin endpoints require the `role` claim to equal `super_admin`. Customer tokens are instantly rejected on admin routes, and admin tokens are rejected on customer profile routes.

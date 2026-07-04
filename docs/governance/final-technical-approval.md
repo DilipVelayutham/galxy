@@ -14,7 +14,7 @@ This document certifies that Module 1 (Auth & User Accounts) has successfully co
 | **Error Contract Validation** | ✓ Approved | Dilip Velayutham (TL) | July 4, 2026 | Error responses normalized to return `"errors": {}` format. |
 | **Frontend Storage Safety** | ✓ Approved | Dilip Velayutham (TL) | July 4, 2026 | Admin token moved to in-memory `AdminAuthContext` (no sessionStorage). |
 | **Conflict Cleanliness** | ✓ Approved | Dilip Velayutham (TL) | July 4, 2026 | Out-of-scope placeholders deleted; `validators.ts` marked as placeholder. |
-| **Integration Test Suite** | ✓ Approved | Dilip Velayutham (TL) | July 4, 2026 | 10 tests passing on mock DB, covering all endpoints and decorators. |
+| **Integration Test Suite** | ✓ Approved | Dilip Velayutham (TL) | July 4, 2026 | 11 tests passing on mock DB, covering all endpoints, decorators, and the `test_refresh_token_rejected_by_middleware` regression check. |
 | **Production Build Check** | ✓ Approved | Dilip Velayutham (TL) | July 4, 2026 | Next.js successfully compiles static assets with TypeScript verification. |
 
 ---
@@ -32,3 +32,33 @@ As Team Lead, Auth Architect, and Integration Lead for Module 1, I declare that 
 **Dilip Velayutham**
 *GLX-M1-01 | Team Lead, Auth Architect, Integration Lead*
 *Module 1 - Auth & User Accounts*
+
+---
+
+## 3. Production Build Verification Logs
+
+The Next.js production compilation was run locally, confirming zero TypeScript warnings or route resolution issues:
+
+```
+▲ Next.js 16.2.10 (Turbopack)
+- Environments: .env
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 5.1s
+  Running TypeScript ...
+  Finished TypeScript in 3.6s ...
+  Collecting page data using 5 workers ...
+  Generating static pages using 5 workers (0/7) ...
+  Generating static pages using 5 workers (1/7) 
+  Generating static pages using 5 workers (3/7) 
+  Generating static pages using 5 workers (5/7) 
+✓ Generating static pages using 5 workers (7/7) in 330ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin/login
+├ ○ /login
+└ ○ /signup
+```

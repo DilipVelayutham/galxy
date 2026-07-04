@@ -1,10 +1,7 @@
 import os
-from flask import Blueprint, request, jsonify, make_response
+from flask import Blueprint, request, jsonify
 from app.utils.auth_middleware import require_admin
 from app.models.admin_user import AdminUser
-from app.utils.token_helper import generate_access_token, generate_refresh_token
-from app.utils.password_helper import verify_password
-from app.db import get_db
 
 admin_auth_bp = Blueprint('admin_auth', __name__)
 

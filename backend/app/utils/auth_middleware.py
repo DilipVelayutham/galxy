@@ -14,6 +14,9 @@ def require_auth(f):
         token = auth_header.split(" ")[1]
         try:
             payload = decode_token(token)
+            if payload.get("type") != "access":
+                return jsonify({"success": False, "message": "Invalid token type", "errors": {}}), 401
+            
             role = payload.get("role")
             if role != "customer":
                 return jsonify({"success": False, "message": "Access denied. Customers only.", "errors": {}}), 403
@@ -47,6 +50,9 @@ def require_admin(f):
         token = auth_header.split(" ")[1]
         try:
             payload = decode_token(token)
+            if payload.get("type") != "access":
+                return jsonify({"success": False, "message": "Invalid token type", "errors": {}}), 401
+            
             role = payload.get("role")
             if role != "super_admin":
                 return jsonify({"success": False, "message": "Access denied. Admins only.", "errors": {}}), 403
@@ -79,13 +85,14 @@ def optional_auth(f):
             token = auth_header.split(" ")[1]
             try:
                 payload = decode_token(token)
-                role = payload.get("role")
-                if role == "customer":
-                    user_id = payload.get("sub")
-                    db = get_db()
-                    user = db.users.find_one({"_id": ObjectId(user_id)})
-                    if user and user.get("is_active", True):
-                        request.user = user
+                if payload.get("type") == "access":
+                    role = payload.get("role")
+                    if role == "customer":
+                        user_id = payload.get("sub")
+                        db = get_db()
+                        user = db.users.find_one({"_id": ObjectId(user_id)})
+                        if user and user.get("is_active", True):
+                            request.user = user
             except Exception:
                 pass
         return f(*args, **kwargs)

@@ -337,6 +337,42 @@ class AuthTestCase(unittest.TestCase):
         self.assertIn("Invalid token type", json_admin_data["message"])
         self.assertIn("errors", json_admin_data)
 
+    def test_refresh_token_rejected_by_middleware(self):
+        # 1. Seed user and admin
+        customer_pass_hash = hash_password("Password1")
+        customer_doc = User.create_document("Customer", "cust_middleware@example.com", "9876543214", customer_pass_hash)
+        cust_id = self.db.users.insert_one(customer_doc).inserted_id
+        
+        admin_pass_hash = hash_password("AdminPassword1")
+        admin_doc = AdminUser.create_document("Admin Asil", "asil_middleware@example.com", admin_pass_hash)
+        admin_id = self.db.admin_users.insert_one(admin_doc).inserted_id
+
+        # 2. Generate refresh tokens
+        customer_refresh_token = generate_refresh_token(cust_id, "customer")
+        admin_refresh_token = generate_refresh_token(admin_id, "super_admin")
+
+        # 3. Request @require_auth endpoint (customer profile) using refresh token in Bearer header -> Should be rejected (401)
+        res_profile = self.client.get(
+            '/api/user/profile',
+            headers={"Authorization": f"Bearer {customer_refresh_token}"}
+        )
+        self.assertEqual(res_profile.status_code, 401)
+        json_profile = res_profile.get_json()
+        self.assertFalse(json_profile["success"])
+        self.assertIn("Invalid token type", json_profile["message"])
+        self.assertIn("errors", json_profile)
+
+        # 4. Request @require_admin endpoint (/api/admin/auth/me) using refresh token in Bearer header -> Should be rejected (401)
+        res_me = self.client.get(
+            '/api/admin/auth/me',
+            headers={"Authorization": f"Bearer {admin_refresh_token}"}
+        )
+        self.assertEqual(res_me.status_code, 401)
+        json_me = res_me.get_json()
+        self.assertFalse(json_me["success"])
+        self.assertIn("Invalid token type", json_me["message"])
+        self.assertIn("errors", json_me)
+
     def test_rate_limiter(self):
         from app.utils.rate_limiter import RateLimiter
         # Create a fresh limiter with low limit for easy testing

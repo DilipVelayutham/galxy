@@ -66,7 +66,7 @@ def login():
     data = request.get_json() or {}
     email = data.get("email")
     if not email:
-        return jsonify({"success": False, "message": "Email is required"}), 400
+        return jsonify({"success": False, "message": "Email is required", "errors": {}}), 400
         
     # Rate limiting on IP + Email combo
     ip_addr = request.remote_addr or "unknown_ip"
@@ -75,7 +75,8 @@ def login():
     if login_limiter.is_rate_limited(rate_key):
         return jsonify({
             "success": False,
-            "message": "Too many login attempts. Please try again after 15 minutes."
+            "message": "Too many login attempts. Please try again after 15 minutes.",
+            "errors": {}
         }), 429
 
     try:

@@ -28,11 +28,30 @@ export default function AIPreviewPanel({
   const [fromCache, setFromCache] = useState(false);
   const [isStale, setIsStale] = useState(false);
   const [limitScope, setLimitScope] = useState(null); // 'session' | 'user'
-  const [errorStatus, setErrorStatus] = useState(null); // 429 | 502 | 504 | etc.
+  const [errorStatus, setErrorStatus] = useState(null); // 400 | 429 | 502 | 504 | etc.
 
   // Refs for tracking changes
   const isFirstChange = useRef(true);
   const lastGeneratedAttributes = useRef(null);
+
+  // Security Helper: Strip prompt injection keywords and excessive characters
+  const sanitizeCustomText = (text) => {
+    if (!text) return '';
+    const injectionPatterns = [
+      /ignore\s+(previous\s+)?instructions/gi,
+      /system\s+prompt/gi,
+      /translate\s+to/gi,
+      /do\s+not\s+spell/gi,
+      /you\s+are\s+now/gi,
+      /override/gi
+    ];
+    let clean = text;
+    injectionPatterns.forEach(pattern => {
+      clean = clean.replace(pattern, '');
+    });
+    clean = clean.replace(/[^a-zA-Z0-9\s.,!?'"-]/g, '');
+    return clean.trim();
+  };
 
   // Determine if a changed attribute affects the AI preview according to schema
   const getAffectsPreviewKeys = () => {
@@ -50,7 +69,6 @@ export default function AIPreviewPanel({
     
     // Skip checking on initial render
     if (isFirstChange.current) {
-      // Check if any affecting key already has a custom value or was modified
       isFirstChange.current = false;
       return;
     }
@@ -83,13 +101,16 @@ export default function AIPreviewPanel({
     setErrorStatus(null);
     setLimitScope(null);
 
-    // Call validation wrapper before checking rate-limiting or caches (Module 4 Handoff)
-    // In production, validate_attributes(category, selectedAttributes) would run here.
+    // Apply client-side prompt sanitization
+    const sanitizedAttributes = { ...selectedAttributes };
+    if (sanitizedAttributes.custom_text) {
+      sanitizedAttributes.custom_text = sanitizeCustomText(sanitizedAttributes.custom_text);
+    }
 
     const requestBody = {
       category_id: category?.id || '',
       product_id: null, // Custom configured item
-      selected_attributes: selectedAttributes,
+      selected_attributes: sanitizedAttributes,
       session_id: user ? null : (localStorage.getItem('galaxy_guest_session_id') || '')
     };
 
@@ -115,7 +136,7 @@ export default function AIPreviewPanel({
         lastGeneratedAttributes.current = { ...selectedAttributes };
         setPreviewState('success');
       } else {
-        // Handle rate limit (429) or gateway errors (502/504)
+        // Handle validation error (400), rate limit (429) or gateway errors (502/504)
         setErrorStatus(response.status);
         if (response.status === 429) {
           setLimitScope(resJson.data?.limit_scope || 'session');
@@ -129,7 +150,7 @@ export default function AIPreviewPanel({
   };
 
   return (
-    <div class="ai-preview-panel-container">
+    <div className="ai-preview-panel-container">
       {/* Tab Navigation */}
       <div className="tab-navigation" role="tablist">
         <button 
@@ -224,7 +245,7 @@ export default function AIPreviewPanel({
               </div>
             )}
 
-            {/* 4. ERROR & RATE-LIMIT STATES */}
+            {/* 4. ERROR & RATE-LIMIT & INVALID STATES */}
             {previewState === 'error' && (
               <div className="ai-state-container error-box">
                 <div className="error-visual">
@@ -241,6 +262,11 @@ export default function AIPreviewPanel({
                           ? 'Daily limit reached, try again tomorrow.'
                           : "You've used your free previews for now — sign up to keep designing."}
                       </p>
+                    </>
+                  ) : errorStatus === 400 ? (
+                    <>
+                      <h3>Invalid Configuration</h3>
+                      <p>One or more of the selected attributes are invalid. Please check your configurations according to the validation rules.</p>
                     </>
                   ) : (
                     <>

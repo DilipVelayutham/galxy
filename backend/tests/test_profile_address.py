@@ -1,19 +1,8 @@
 import pytest
-import jwt
 import datetime
 from bson import ObjectId
-from backend.app import create_app
-
-def generate_test_token(user_id, role="customer"):
-    """
-    Helper to generate a JWT token for testing.
-    """
-    payload = {
-        "sub": str(user_id),
-        "role": role,
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
-    }
-    return jwt.encode(payload, "default_jwt_secret_for_development", algorithm="HS256")
+from app import create_app
+from app.utils.token_helper import generate_access_token
 
 @pytest.fixture
 def app():
@@ -30,7 +19,7 @@ def client(app):
 
 @pytest.fixture
 def test_user(app):
-    from backend.app import db
+    from app import db
     user_id = ObjectId()
     user_data = {
         "_id": user_id,
@@ -42,8 +31,8 @@ def test_user(app):
         "auth_provider": "email",
         "is_verified": False,
         "is_active": True,
-        "created_at": datetime.datetime.utcnow(),
-        "updated_at": datetime.datetime.utcnow()
+        "created_at": datetime.datetime.now(datetime.timezone.utc),
+        "updated_at": datetime.datetime.now(datetime.timezone.utc)
     }
     db.users.insert_one(user_data)
     yield user_data
@@ -56,7 +45,7 @@ def test_get_profile_requires_auth(client):
     assert response.json['success'] is False
 
 def test_get_profile_success(client, test_user):
-    token = generate_test_token(test_user['_id'])
+    token = generate_access_token(test_user['_id'])
     response = client.get('/api/user/profile', headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     assert response.json['success'] is True
@@ -64,7 +53,7 @@ def test_get_profile_success(client, test_user):
     assert "password_hash" not in response.json['data']
 
 def test_update_profile_success(client, test_user):
-    token = generate_test_token(test_user['_id'])
+    token = generate_access_token(test_user['_id'])
     response = client.put('/api/user/profile', 
                           headers={"Authorization": f"Bearer {token}"},
                           json={"name": "Updated Name", "phone": "9887654321"})
@@ -74,7 +63,7 @@ def test_update_profile_success(client, test_user):
     assert response.json['data']['phone'] == "9887654321"
 
 def test_update_profile_rejects_email(client, test_user):
-    token = generate_test_token(test_user['_id'])
+    token = generate_access_token(test_user['_id'])
     response = client.put('/api/user/profile', 
                           headers={"Authorization": f"Bearer {token}"},
                           json={"email": "newemail@galxy.com"})
@@ -83,7 +72,7 @@ def test_update_profile_rejects_email(client, test_user):
     assert "email" in response.json['errors']
 
 def test_address_invariants(client, test_user):
-    token = generate_test_token(test_user['_id'])
+    token = generate_access_token(test_user['_id'])
     
     # 1. Add first address (should be default automatically)
     address_1 = {
@@ -129,7 +118,7 @@ def test_address_invariants(client, test_user):
     addr3_id = res.json['data']['_id']
 
     # Verify database state - only addr3 should be default
-    from backend.app import db
+    from app import db
     user = db.users.find_one({"_id": ObjectId(test_user['_id'])})
     for addr in user['addresses']:
         if str(addr['_id']) == addr3_id:
@@ -152,7 +141,7 @@ def test_address_invariants(client, test_user):
     assert "retain at least one address" in res.json['errors']['message']
 
 def test_delete_default_address_changes_default(client, test_user):
-    token = generate_test_token(test_user['_id'])
+    token = generate_access_token(test_user['_id'])
     
     # Add two addresses, second is default
     client.post('/api/user/addresses', headers={"Authorization": f"Bearer {token}"}, json={
@@ -162,7 +151,7 @@ def test_delete_default_address_changes_default(client, test_user):
         "label": "Work", "line1": "456 Office Rd", "city": "Bangalore", "state": "Karnataka", "pincode": "560001", "is_default": True
     })
     
-    from backend.app import db
+    from app import db
     user = db.users.find_one({"_id": ObjectId(test_user['_id'])})
     addr1 = user['addresses'][0]
     addr2 = user['addresses'][1]
@@ -178,8 +167,8 @@ def test_delete_default_address_changes_default(client, test_user):
     assert user['addresses'][0]['is_default'] is True
 
 def test_delete_default_address_blocked_by_pending_order(client, test_user):
-    token = generate_test_token(test_user['_id'])
-    from backend.app import db
+    token = generate_access_token(test_user['_id'])
+    from app import db
     
     # Add two addresses, second is default
     client.post('/api/user/addresses', headers={"Authorization": f"Bearer {token}"}, json={

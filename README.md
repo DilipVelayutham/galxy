@@ -21,6 +21,14 @@
   - User Model
   - Frontend: Profile Page, Address Page, AddressCard, AddressForm
 
+### Tharani Jayaprakash (Security & Password Recovery Developer)
+- Branch: `in3-tharani`
+- Responsibilities:
+  - Password Helper, Validators
+  - Forgot Password, Reset Password
+  - SMTP Integration
+  - Frontend: Forgot Password Page, Reset Password Page, Shared Validators Module
+
 ### Arun Kumar (Backend Developer — Admin Identity, Testing & Documentation)
 - Branch: `in4-arun`
 - Responsibilities:

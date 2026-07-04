@@ -1,8 +1,13 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .env
+<<<<<<< HEAD
 .pytest_cache/
 .vscode/
 .idea/
@@ -17,3 +22,28 @@ backend/app/configs/__pycache__/
 backend/app/utils/__pycache__/
 *.zip
 
+=======
+.venv
+venv/
+ENV/
+*.log
+=======
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
+# Environment files
+.env
+.env.local
+
+# IDE/OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+>>>>>>> origin/main
+>>>>>>> origin/main

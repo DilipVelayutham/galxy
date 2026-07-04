@@ -1,0 +1,188 @@
+GALXY — Custom Lighting & Craft Studio
+Module 5 — AI Preview Generation
+Intern Code Review · Backend Submission (feat-m5-frontend2)
+Reviewed: July 2026  ·  Reviewer: Claude (automated code review)  ·  Scope: backend/ only (no frontend included in this zip)
+Overall Verdict
+Estimated completion: ~88% of backend scope   (0% of frontend — not present in this zip)
+This is a strong backend submission. The intern implemented the full generation pipeline (validate → cache → rate-limit → prompt → generate → upload → log), the provider-adapter pattern, prompt templating with all four placeholder rules from §5, and both the public and admin API routes — backed by 15 passing-by-inspection automated tests. Code is clean, well-commented, and explicit about module boundaries (it never re-implements Module 2 or Module 4's job). The main deductions are one spec-order deviation in the pipeline, one fail-open rate-limit bug that undermines the module's core cost-control purpose, and the complete absence of frontend code despite the branch name.
+Completion by Spec Section
+Spec SectionItemStatusNotes
+Spec Section
+Item
+Status
+Notes
+§2ai_generations collection — full schema + 4 indexes✔ DoneMatches spec exactly, incl. serialization helpers.
+§2
+ai_generations collection — full schema + 4 indexes
+✔ Done
+Matches spec exactly, incl. serialization helpers.
+§3Folder structure (models/services/routes/configs)✔ DoneMirrors spec 1:1, plus a utils/ layer (reasonable addition).
+§3
+Folder structure (models/services/routes/configs)
+✔ Done
+Mirrors spec 1:1, plus a utils/ layer (reasonable addition).
+§4Env vars (AI_PROVIDER, GEMINI_API_KEY, thresholds, timeout)✔ DoneAll present in ai_config.py and .env.example.
+§4
+Env vars (AI_PROVIDER, GEMINI_API_KEY, thresholds, timeout)
+✔ Done
+All present in ai_config.py and .env.example.
+§5Prompt builder — labels not raw values, exclude affects_ai_preview:false, sanitize free text, empty-placeholder cleanup✔ DoneAll 4 rules implemented and unit-tested.
+§5
+Prompt builder — labels not raw values, exclude affects_ai_preview:false, sanitize free text, empty-placeholder cleanup
+✔ Done
+All 4 rules implemented and unit-tested.
+§67-step generation pipeline◐ PartialImplemented, but step order is swapped: cache is checked before rate-limit, not after (see Issues).
+§6
+7-step generation pipeline
+◐ Partial
+Implemented, but step order is swapped: cache is checked before rate-limit, not after (see Issues).
+§7Caching (hash key, shared across users, bypassed for custom_text)✔ DoneSHA-256 of category_id + sorted attrs; has_custom_text() correctly bypasses cache.
+§7
+Caching (hash key, shared across users, bypassed for custom_text)
+✔ Done
+SHA-256 of category_id + sorted attrs; has_custom_text() correctly bypasses cache.
+§8Rate limiting (guest session cap + daily user cap, cache hits exempt)◐ PartialLogic is correct, but fails OPEN (allows the request) if the DB count query errors — see Issues.
+§8
+Rate limiting (guest session cap + daily user cap, cache hits exempt)
+◐ Partial
+Logic is correct, but fails OPEN (allows the request) if the DB count query errors — see Issues.
+§9POST /generate-preview contract✔ DoneResponse shape matches; extra generation_id/limit_scope fields are useful additions.
+§9
+POST /generate-preview contract
+✔ Done
+Response shape matches; extra generation_id/limit_scope fields are useful additions.
+§9GET /generations/:user_id✔ DoneFully implemented (code comments call it a 'Backend 2 stub' but it is complete and working).
+§9
+GET /generations/:user_id
+✔ Done
+Fully implemented (code comments call it a 'Backend 2 stub' but it is complete and working).
+§9GET /admin/ai/generations✔ DoneFully implemented with category/status/date filters + pagination.
+§9
+GET /admin/ai/generations
+✔ Done
+Fully implemented with category/status/date filters + pagination.
+§9PUT /admin/categories/:id/ai-prompt-template✔ DoneCorrectly NOT built here — explicit guardrail comment defers to Module 2, exactly as spec recommends.
+§9
+PUT /admin/categories/:id/ai-prompt-template
+✔ Done
+Correctly NOT built here — explicit guardrail comment defers to Module 2, exactly as spec recommends.
+§10Cloudinary upload to dedicated ai-previews folder✔ DoneFolder separation implemented; helper explicitly flagged for future consolidation with Modules 3/10.
+§10
+Cloudinary upload to dedicated ai-previews folder
+✔ Done
+Folder separation implemented; helper explicitly flagged for future consolidation with Modules 3/10.
+§11Boundary rules (no validation, no pricing, no cart writes)✔ DoneRespected throughout — validation always delegated to Module 4 stub/HTTP client.
+§11
+Boundary rules (no validation, no pricing, no cart writes)
+✔ Done
+Respected throughout — validation always delegated to Module 4 stub/HTTP client.
+§12Handoff contract (stable response/rate-limit shapes)✔ DoneShapes match; output_image_url is a real Cloudinary secure_url, stable as promised.
+§12
+Handoff contract (stable response/rate-limit shapes)
+✔ Done
+Shapes match; output_image_url is a real Cloudinary secure_url, stable as promised.
+—Automated tests◐ Partial15 tests for prompt builder + routes; no direct unit tests for cache key logic or rate-limit counting.
+—
+Automated tests
+◐ Partial
+15 tests for prompt builder + routes; no direct unit tests for cache key logic or rate-limit counting.
+—Frontend (AI Preview Panel referenced in §12)✘ MissingZip is backend-only despite branch name 'feat-m5-frontend2' — no frontend code included.
+—
+Frontend (AI Preview Panel referenced in §12)
+✘ Missing
+Zip is backend-only despite branch name 'feat-m5-frontend2' — no frontend code included.
+
+Issues Found
+Ordered by how much they matter for correctness and cost control:
+#SeverityIssueWhereRecommendation
+#
+Severity
+Issue
+Where
+Recommendation
+1BUGRate limit is checked AFTER the cache check, but spec §6 orders it the other way (rate-limit first, then cache). Net effect: a guest/user who has already exhausted their quota can still keep pulling free cached results indefinitely, since a cache hit is returned before quota is ever checked.ai_service.py, steps 3–4Swap the order: check ai_rate_limit_service first; only consult ai_cache_service after confirming the caller is within quota (cached hits still shouldn't decrement quota, but an exhausted quota should still block).
+1
+BUG
+Rate limit is checked AFTER the cache check, but spec §6 orders it the other way (rate-limit first, then cache). Net effect: a guest/user who has already exhausted their quota can still keep pulling free cached results indefinitely, since a cache hit is returned before quota is ever checked.
+ai_service.py, steps 3–4
+Swap the order: check ai_rate_limit_service first; only consult ai_cache_service after confirming the caller is within quota (cached hits still shouldn't decrement quota, but an exhausted quota should still block).
+2BUG / RISKai_rate_limit_service.check_rate_limit() fails OPEN: if the MongoDB count_documents() call throws, the exception is logged and swallowed, then the function falls through to 'allowed=True'. Since this module exists specifically to cap paid/free-tier API usage, a transient DB hiccup would let unlimited generations through.ai_rate_limit_service.pyFail closed (return allowed=False with a generic retry message) on DB errors here, matching the fail-closed pattern already used correctly in module4_client.py.
+2
+BUG / RISK
+ai_rate_limit_service.check_rate_limit() fails OPEN: if the MongoDB count_documents() call throws, the exception is logged and swallowed, then the function falls through to 'allowed=True'. Since this module exists specifically to cap paid/free-tier API usage, a transient DB hiccup would let unlimited generations through.
+ai_rate_limit_service.py
+Fail closed (return allowed=False with a generic retry message) on DB errors here, matching the fail-closed pattern already used correctly in module4_client.py.
+4MISSINGThe model schema defines status: "rate_limited" as a valid enum value (and admin route docs mention it as a filter option), but no code path ever writes a record with that status — rate-limited requests return a 429 without any DB log.ai_generation.py / ai_service.pyEither log a lightweight ai_generations doc with status="rate_limited" when blocked (useful for the admin analytics dashboard in Module 12), or drop the enum value from the model docstring if it's intentionally unused.
+4
+MISSING
+The model schema defines status: "rate_limited" as a valid enum value (and admin route docs mention it as a filter option), but no code path ever writes a record with that status — rate-limited requests return a 429 without any DB log.
+ai_generation.py / ai_service.py
+Either log a lightweight ai_generations doc with status="rate_limited" when blocked (useful for the admin analytics dashboard in Module 12), or drop the enum value from the model docstring if it's intentionally unused.
+5RISKCORS is configured with origins: "*" for all /api/* routes.app/__init__.pyFine for local dev; must be restricted to the deployed frontend origin before staging/production.
+5
+RISK
+CORS is configured with origins: "*" for all /api/* routes.
+app/__init__.py
+Fine for local dev; must be restricted to the deployed frontend origin before staging/production.
+6NOTEauth_helpers.py is an intentional stand-in ('shim') for Module 1's real auth, using its own JWT_SECRET env var not listed in the spec's §4 env var list.auth_helpers.pyAlready flagged well in code comments — just make sure JWT_SECRET is coordinated with Module 1 before integration, or tokens issued by login won't validate here.
+6
+NOTE
+auth_helpers.py is an intentional stand-in ('shim') for Module 1's real auth, using its own JWT_SECRET env var not listed in the spec's §4 env var list.
+auth_helpers.py
+Already flagged well in code comments — just make sure JWT_SECRET is coordinated with Module 1 before integration, or tokens issued by login won't validate here.
+
+What's Missing
+Frontend: the AI Preview Panel component referenced throughout §12 (which needs the exact 429/limit_reached shape) is not in this zip at all — only backend/ exists. Given the branch name feat-m5-frontend2, this looks like a separate PR/submission still to come; worth confirming with the intern whether it's tracked elsewhere.
+Direct unit tests for ai_cache_service.make_cache_key() and ai_rate_limit_service.check_rate_limit() — current tests only exercise them indirectly through mocked Flask routes.
+Any logged record for status="rate_limited" (see Issue 4) — meaning the admin dashboard in Module 12 will show 0 rate-limited events even when the limit is actively blocking guests.
+A cleanup/expiry job for old ai_generations documents, even though created_at is indexed 'for cleanup/expiry jobs' per §2 — no such job exists yet (may be intentionally out of scope for this ticket).
+Strengths
+Prompt builder implements all four §5 placeholder rules correctly and has dedicated, passing-by-inspection unit tests for each (label resolution, affects_ai_preview exclusion, injection sanitization, empty-placeholder cleanup).
+Provider adapter (ai_provider_client.py) genuinely follows the 'swappable provider' requirement from §4 — a registry dict + one function per provider, so adding OpenAI/Stability later is a small diff, not a rewrite.
+Clean separation of concerns matches the spec's folder structure almost exactly, including keeping category/prompt-template ownership with Module 2 (the PUT route is deliberately not implemented here, per §9's explicit note).
+Consistently avoids leaking raw provider errors to the client (502/504 responses are generic; internal exception text stays in logs only), per §6 step 8.
+Cache correctly keyed on category_id + sorted attributes (order-independent) and correctly bypassed whenever a free-text/custom_text attribute is present, per §7.
+module4_client.py fails closed on validation-service errors/timeouts (blocks the request) — the safer default, and a useful contrast to the rate-limit service's fail-open bug (Issue 2).
+Includes a working dev fallback (M4_VALIDATION_MODE=local) so Module 5 can be developed and tested before Module 4 exists — a thoughtful touch for parallel team workflows.
+Seed script and 15 automated tests (prompt builder + Flask route integration, all external calls mocked) give a working, demonstrable slice out of the box.
+README is explicit about exactly what was and wasn't built ('Backend 1, T1+T2'), which stub routes belong to a teammate, and where a Day-3 merge-conflict risk exists (splitting ai_routes.py) — good team hygiene.
+Recommended Fixes to Reach ~100%
+Swap pipeline order: check rate limit before cache lookup, per §6.
+Fail closed on rate-limit DB errors: block the request (429 or 503) instead of silently allowing it through when the quota count query fails.
+Log rate_limited generations: insert a lightweight ai_generations doc with status="rate_limited" so admin analytics aren't blind to blocked attempts.
+Lock down CORS to the real frontend origin before this leaves local dev.
+Deliver or link the frontend piece (AI Preview Panel) that this backend contract was designed for — right now Module 5 has no way to be exercised end-to-end by a real user.
+Add the two missing unit-test files for cache and rate-limit services to close the test-coverage gap.
+Summary Table
+AreaGrade
+Area
+Grade
+Architecture & folder structureExcellent — matches spec closely, sensible extra utils/ layer
+Architecture & folder structure
+Excellent — matches spec closely, sensible extra utils/ layer
+Prompt building (§5)Excellent — all 4 rules correct and tested
+Prompt building (§5)
+Excellent — all 4 rules correct and tested
+Generation pipeline (§6)Good, but step order bug (Issue 1)
+Generation pipeline (§6)
+Good, but step order bug (Issue 1)
+Caching (§7)Correct and well-reasoned
+Caching (§7)
+Correct and well-reasoned
+Rate limiting (§8)Logic correct, but fail-open bug undercuts its purpose (Issue 2)
+Rate limiting (§8)
+Logic correct, but fail-open bug undercuts its purpose (Issue 2)
+API contract (§9)Fully matches, plus useful extra fields
+API contract (§9)
+Fully matches, plus useful extra fields
+Module boundaries (§11)Respected throughout, explicitly documented
+Module boundaries (§11)
+Respected throughout, explicitly documented
+TestingGood start (15 tests), gaps in cache/rate-limit unit coverage
+Testing
+Good start (15 tests), gaps in cache/rate-limit unit coverage
+FrontendNot delivered in this zip
+Frontend
+Not delivered in this zip
+
+Overall this is well above typical intern quality for a module of this complexity — the core risk items (Issue 1 and Issue 2) are both small, targeted fixes rather than structural rework, and the module is close to production-ready on the backend side once those are addressed and the frontend piece is delivered.

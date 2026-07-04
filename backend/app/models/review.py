@@ -29,15 +29,28 @@ class ReviewModel:
     def serialize(review, public=False):
         """
         Serializes a MongoDB Review document to a JSON-compatible dictionary.
-        If public is True, user_id and order_id are omitted for privacy.
+        If public is True, exposes only customer_name, rating, comment, images, created_at, and review id.
         """
         if not review:
             return None
+            
+        if public:
+            return {
+                "_id": str(review["_id"]),
+                "id": str(review["_id"]),
+                "customer_name": review.get("customer_name"),
+                "rating": review.get("rating"),
+                "comment": review.get("comment"),
+                "images": review.get("images", []),
+                "created_at": review.get("created_at").isoformat() if isinstance(review.get("created_at"), datetime) else review.get("created_at")
+            }
             
         serialized = {
             "_id": str(review["_id"]),
             "id": str(review["_id"]),
             "product_id": str(review.get("product_id")),
+            "user_id": str(review.get("user_id")) if review.get("user_id") else None,
+            "order_id": str(review.get("order_id")) if review.get("order_id") else None,
             "order_number": review.get("order_number"),
             "rating": review.get("rating"),
             "comment": review.get("comment"),
@@ -49,12 +62,8 @@ class ReviewModel:
             "updated_at": review.get("updated_at").isoformat() if isinstance(review.get("updated_at"), datetime) else review.get("updated_at")
         }
         
-        # Include rejection reason if present and not a public serialization
+        # Include rejection reason if present
         if "rejection_reason" in review:
             serialized["rejection_reason"] = review.get("rejection_reason")
-            
-        if not public:
-            serialized["user_id"] = str(review.get("user_id")) if review.get("user_id") else None
-            serialized["order_id"] = str(review.get("order_id")) if review.get("order_id") else None
             
         return serialized

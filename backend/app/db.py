@@ -5,7 +5,7 @@ _client = None
 _db = None
 
 def init_indexes():
-    """Initializes MongoDB indexes for reviews."""
+    """Initializes MongoDB indexes for reviews and testimonials."""
     global _db
     if _db is None:
         return
@@ -16,6 +16,12 @@ def init_indexes():
         _db["reviews"].create_index([("is_approved", 1)])
         # Compound index on user_id + order_id
         _db["reviews"].create_index([("user_id", 1), ("order_id", 1)])
+        # Index on created_at
+        _db["reviews"].create_index([("created_at", 1)])
+        
+        # Testimonials collection indexes
+        _db["testimonials"].create_index([("is_active", 1)])
+        _db["testimonials"].create_index([("display_order", 1)])
         
         print("[DATABASE] MongoDB indexes initialized successfully.")
     except Exception as e:

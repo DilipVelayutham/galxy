@@ -88,7 +88,40 @@ def delete_review(id):
 def promote_to_testimonial(id):
     """
     POST /api/admin/reviews/:id/promote-to-testimonial
-    Promotes a review to a testimonial.
+    Promotes an approved review to a testimonial.
     """
-    result, status_code = ReviewService.promote_to_testimonial(id)
+    customer_location = "Verified Buyer"
+    display_order = 0
+    
+    if request.is_json:
+        data = request.get_json() or {}
+        customer_location = data.get("customer_location", "Verified Buyer")
+        display_order = data.get("display_order", 0)
+    else:
+        customer_location = request.form.get("customer_location", "Verified Buyer")
+        display_order = request.form.get("display_order", 0)
+
+    errors = {}
+    if not isinstance(customer_location, str) or len(customer_location.strip()) < 1 or len(customer_location.strip()) > 100:
+        errors["customer_location"] = "Customer location must be a string between 1 and 100 characters."
+
+    try:
+        display_order_val = int(display_order)
+        if display_order_val < 0:
+            errors["display_order"] = "Display order must be a non-negative integer."
+    except (ValueError, TypeError):
+        errors["display_order"] = "Display order must be an integer."
+
+    if errors:
+        return jsonify({
+            "success": False,
+            "message": "Validation failed",
+            "errors": errors
+        }), 400
+
+    result, status_code = ReviewService.promote_to_testimonial(
+        review_id=id,
+        customer_location=customer_location,
+        display_order=int(display_order)
+    )
     return jsonify(result), status_code

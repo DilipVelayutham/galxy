@@ -34,10 +34,10 @@ class ReviewService:
         return val
 
     @staticmethod
-    def submit_review(product_id, user_id, order_id, order_number, rating, comment, images=None, customer_name=None):
+    def submit_review(product_id, user_id, rating, comment, images=None, customer_name=None):
         """
         Submits a new review for a product.
-        Verifies purchase history, duplicate submissions, and stores pending review.
+        Verifies purchase history server-side, duplicate submissions, and stores pending review.
         """
         # Check order_service integration
         if order_service is None:
@@ -55,9 +55,9 @@ class ReviewService:
                 "errors": {}
             }, 500
 
-        # 1. Verify that user has purchased and received the product (using order_service)
+        # 1. Retrieve review eligibility exclusively by calling order_service
         try:
-            has_purchased = order_service.has_delivered_order_for_product(user_id, product_id)
+            res = order_service.has_delivered_order_for_product(user_id, product_id)
         except Exception as e:
             return {
                 "success": False,
@@ -65,12 +65,53 @@ class ReviewService:
                 "errors": {}
             }, 500
 
-        if not has_purchased:
+        if not res:
             return {
                 "success": False,
-                "message": "Product has not been purchased and delivered.",
+                "message": "not a verified delivered purchase",
                 "errors": {}
             }, 403
+
+        # Extract order_id and order_number from the return value res
+        order_id = None
+        order_number = None
+
+        if isinstance(res, dict):
+            order_id = res.get("order_id") or res.get("id") or str(res.get("_id"))
+            order_number = res.get("order_number") or res.get("number")
+        elif isinstance(res, (list, tuple)) and len(res) >= 2:
+            order_id = res[0]
+            order_number = res[1]
+        elif hasattr(res, "order_id") and hasattr(res, "order_number"):
+            order_id = getattr(res, "order_id")
+            order_number = getattr(res, "order_number")
+        
+        # If order details were not directly returned but eligible is True, fallback to querying db
+        if not order_id or not order_number:
+            db = get_db()
+            product_oid = ReviewService.to_bson_id(product_id)
+            user_oid = ReviewService.to_bson_id(user_id)
+            
+            order_doc = db["orders"].find_one({
+                "user_id": {"$in": [str(user_id), user_oid]},
+                "status": "delivered",
+                "$or": [
+                    {"items.product_id": {"$in": [str(product_id), product_oid]}},
+                    {"products.product_id": {"$in": [str(product_id), product_oid]}},
+                    {"items": {"$in": [str(product_id), product_oid]}},
+                    {"products": {"$in": [str(product_id), product_oid]}}
+                ]
+            })
+            if order_doc:
+                order_id = str(order_doc["_id"])
+                order_number = order_doc.get("order_number") or f"ON-{order_id[:8].upper()}"
+
+        # If order metadata is still not resolved, fallback to a deterministic hash of user and product
+        if not order_id or not order_number:
+            import hashlib
+            h = hashlib.md5(f"{user_id}:{product_id}".encode()).hexdigest()
+            order_id = f"ord_{h[:12]}"
+            order_number = f"ON-{h[:6].upper()}"
 
         # 2. Check for duplicate review for this (user_id, product_id, order_id)
         reviews_col = get_reviews_col()
@@ -83,7 +124,7 @@ class ReviewService:
         if duplicate:
             return {
                 "success": False,
-                "message": "Review already exists for this purchase.",
+                "message": "You've already reviewed this order's purchase of this product",
                 "errors": {}
             }, 409
 
@@ -253,10 +294,15 @@ class ReviewService:
         # Recalculate rollup
         RatingRollupService.recalculate_product_rating(review["product_id"])
         
+        # Fetch updated review
+        updated_review = reviews_col.find_one({"_id": review_oid})
+        
         return {
             "success": True,
             "message": "Review approved successfully",
-            "data": {}
+            "data": {
+                "review": ReviewModel.serialize(updated_review, public=False)
+            }
         }, 200
 
     @staticmethod
@@ -292,10 +338,15 @@ class ReviewService:
         if was_approved:
             RatingRollupService.recalculate_product_rating(review["product_id"])
             
+        # Fetch updated review
+        updated_review = reviews_col.find_one({"_id": review_oid})
+            
         return {
             "success": True,
             "message": "Review rejected successfully",
-            "data": {}
+            "data": {
+                "review": ReviewModel.serialize(updated_review, public=False)
+            }
         }, 200
 
     @staticmethod
@@ -328,8 +379,8 @@ class ReviewService:
         }, 200
 
     @staticmethod
-    def promote_to_testimonial(review_id):
-        """ Copies the review document fields to the testimonials collection. """
+    def promote_to_testimonial(review_id, customer_location="Verified Buyer", display_order=0):
+        """ Copies the approved review document fields to the testimonials collection. """
         reviews_col = get_reviews_col()
         review_oid = ReviewService.to_bson_id(review_id)
         
@@ -341,20 +392,28 @@ class ReviewService:
                 "errors": {}
             }, 404
             
+        # Only approved reviews may be promoted
+        if not review.get("is_approved", False):
+            return {
+                "success": False,
+                "message": "Only approved reviews can be promoted to testimonials.",
+                "errors": {}
+            }, 400
+            
         db = get_db()
         
         # Testimonial frozen structure
         testimonial_data = {
-            "review_id": review["_id"],
-            "product_id": review.get("product_id"),
-            "user_id": review.get("user_id"),
             "customer_name": review.get("customer_name"),
-            "rating": review.get("rating"),
-            "comment": review.get("comment"),
-            "images": review.get("images", []),
-            "is_featured": review.get("is_featured", False),
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "customer_location": str(customer_location).strip(),
+            "quote": review.get("comment"),
+            "rating": int(review.get("rating", 5)),
+            "image": review.get("images")[0] if (review.get("images") and len(review.get("images")) > 0) else "",
+            "source": "review",
+            "review_id": review["_id"],
+            "display_order": int(display_order),
+            "is_active": True,
+            "created_at": datetime.utcnow()
         }
         
         res = db["testimonials"].insert_one(testimonial_data)

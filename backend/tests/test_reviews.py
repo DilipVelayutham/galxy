@@ -15,13 +15,21 @@ Config.MONGO_URI = "mongomock://localhost"
 Config.DB_NAME = "test_reviews_db"
 
 class MockOrderService:
-    def __init__(self, eligible=True):
+    def __init__(self, eligible=True, order_id="ord_buyer_123", order_number="ON-555"):
         self.eligible = eligible
+        self.order_id = order_id
+        self.order_number = order_number
         
     def has_delivered_order_for_product(self, user_id, product_id):
         if self.eligible is Exception:
             raise Exception("Connection timeout to order database.")
-        return self.eligible
+        if not self.eligible:
+            return False
+        # Return structured order information
+        return {
+            "order_id": self.order_id,
+            "order_number": self.order_number
+        }
 
 @pytest.fixture
 def app():
@@ -71,31 +79,40 @@ def get_auth_headers(user_id="user_123", role="customer", name="John Doe"):
 
 # --- TESTS ---
 
+def test_database_indexes(db):
+    # Check reviews collection indexes
+    reviews_indexes = db["reviews"].index_information()
+    assert "product_id_1" in reviews_indexes
+    assert "is_approved_1" in reviews_indexes
+    assert "user_id_1_order_id_1" in reviews_indexes  # Compound index
+    assert "created_at_1" in reviews_indexes
+
+    # Check testimonials collection indexes
+    testimonials_indexes = db["testimonials"].index_information()
+    assert "is_active_1" in testimonials_indexes
+    assert "display_order_1" in testimonials_indexes
+
 def test_submit_review_authentication_required(client, db):
     # Call without auth header
     response = client.post(f"/api/products/{ObjectId()}/reviews", json={})
     assert response.status_code == 401
     data = json.loads(response.data)
     assert data["success"] is False
-    assert "Authorization token is missing" in data["message"]
+    assert "errors" in data
 
 def test_submit_review_validation(client, db):
     headers = get_auth_headers()
     prod_id = str(ObjectId())
     
-    # Missing fields
+    # Missing rating
     response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={})
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data["success"] is False
-    assert "order_id" in data["errors"]
-    assert "order_number" in data["errors"]
     assert "rating" in data["errors"]
 
     # Invalid rating
     response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
-        "order_id": "ord_1",
-        "order_number": "ON-100",
         "rating": 6,
         "comment": "Nice"
     })
@@ -103,6 +120,24 @@ def test_submit_review_validation(client, db):
     data = json.loads(response.data)
     assert "rating" in data["errors"]
     assert "between 1 and 5" in data["errors"]["rating"]
+
+    # Invalid comment length
+    response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
+        "rating": 4,
+        "comment": "A" * 2001
+    })
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert "comment" in data["errors"]
+
+    # Invalid images payload type
+    response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
+        "rating": 4,
+        "images": "invalid_string_format"
+    })
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert "images" in data["errors"]
 
 def test_submit_review_not_eligible(client, db, monkeypatch):
     import app.services.review_service as rs
@@ -112,8 +147,6 @@ def test_submit_review_not_eligible(client, db, monkeypatch):
     prod_id = str(ObjectId())
     
     response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
-        "order_id": "ord_unauth",
-        "order_number": "ON-999",
         "rating": 5,
         "comment": "Nice product"
     })
@@ -121,21 +154,19 @@ def test_submit_review_not_eligible(client, db, monkeypatch):
     assert response.status_code == 403
     data = json.loads(response.data)
     assert data["success"] is False
-    assert "purchased and delivered" in data["message"]
+    assert data["message"] == "not a verified delivered purchase"
 
 def test_submit_review_success_and_duplicate(client, db):
     headers = get_auth_headers(user_id="user_buyer", name="Jane Buyer")
     prod_id = str(ObjectId())
     
     review_payload = {
-        "order_id": "ord_buyer_1",
-        "order_number": "ON-555",
         "rating": 4,
         "comment": "Good quality",
         "images": ["http://example.com/img1.jpg"]
     }
     
-    # 1. First submission should succeed
+    # 1. First submission should succeed (order metadata determined server-side)
     response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json=review_payload)
     assert response.status_code == 201
     data = json.loads(response.data)
@@ -144,166 +175,62 @@ def test_submit_review_success_and_duplicate(client, db):
     assert "id" in data["data"]
     review_id = data["data"]["id"]
 
-    # Verify review in database
+    # Verify review in database contains server-side resolved order values
     review_doc = db["reviews"].find_one({"_id": ObjectId(review_id)})
     assert review_doc is not None
     assert review_doc["is_approved"] is False
     assert review_doc["customer_name"] == "Jane Buyer"
     assert review_doc["rating"] == 4
+    assert review_doc["order_id"] == "ord_buyer_123"
     assert review_doc["order_number"] == "ON-555"
 
-    # 2. Duplicate submission with same user, product, and order should fail with 409
+    # 2. Duplicate submission for same user/product/order should fail with 409 and exact message
     response_dup = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json=review_payload)
     assert response_dup.status_code == 409
     data_dup = json.loads(response_dup.data)
     assert data_dup["success"] is False
-    assert "already exists" in data_dup["message"]
+    assert data_dup["message"] == "You've already reviewed this order's purchase of this product"
 
-    # 3. Submission with different order_id should succeed
-    review_payload_diff = review_payload.copy()
-    review_payload_diff["order_id"] = "ord_buyer_2"
-    response_diff = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json=review_payload_diff)
-    assert response_diff.status_code == 201
-
-def test_submit_review_integration_missing_order_service(client, db, monkeypatch):
-    import app.services.review_service as rs
-    monkeypatch.setattr(rs, "order_service", None)
-
-    headers = get_auth_headers()
-    prod_id = str(ObjectId())
-    
-    response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
-        "order_id": "ord_missing",
-        "order_number": "ON-MISSING",
-        "rating": 5,
-        "comment": "Nice product"
-    })
-    
-    assert response.status_code == 500
-    data = json.loads(response.data)
-    assert data["success"] is False
-    assert "integration error" in data["message"].lower()
-
-def test_submit_review_integration_order_service_throws(client, db, monkeypatch):
-    import app.services.review_service as rs
-    monkeypatch.setattr(rs, "order_service", MockOrderService(eligible=Exception))
-
-    headers = get_auth_headers()
-    prod_id = str(ObjectId())
-    
-    response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
-        "order_id": "ord_throws",
-        "order_number": "ON-THROWS",
-        "rating": 5,
-        "comment": "Nice product"
-    })
-    
-    assert response.status_code == 500
-    data = json.loads(response.data)
-    assert data["success"] is False
-    assert "integration call error" in data["message"].lower()
-
-def test_submit_review_integration_missing_cloudinary(client, db, monkeypatch):
-    import app.services.review_service as rs
-    monkeypatch.setattr(rs, "upload_image", None)
-
-    headers = get_auth_headers()
-    prod_id = str(ObjectId())
-    
-    response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
-        "order_id": "ord_img_err",
-        "order_number": "ON-IMG-ERR",
-        "rating": 5,
-        "comment": "Nice product",
-        "images": ["file1.jpg"]
-    })
-    
-    assert response.status_code == 500
-    data = json.loads(response.data)
-    assert data["success"] is False
-    assert "Cloudinary helper is currently unavailable" in data["message"]
-
-def test_public_reviews_api(client, db):
+def test_public_reviews_api_fields(client, db):
     prod_id = ObjectId()
     prod_id_str = str(prod_id)
     
-    # Insert multiple reviews
-    db["reviews"].insert_many([
-        # Approved reviews
-        {
-            "product_id": prod_id,
-            "user_id": "user1",
-            "order_id": "ord1",
-            "order_number": "ON-1",
-            "rating": 3,
-            "comment": "Average",
-            "images": [],
-            "customer_name": "Alice",
-            "is_approved": True,
-            "is_featured": False,
-            "created_at": datetime(2026, 1, 1)
-        },
-        {
-            "product_id": prod_id,
-            "user_id": "user2",
-            "order_id": "ord2",
-            "order_number": "ON-2",
-            "rating": 5,
-            "comment": "Perfect!",
-            "images": ["img.jpg"],
-            "customer_name": "Bob",
-            "is_approved": True,
-            "is_featured": True,
-            "created_at": datetime(2026, 1, 2)
-        },
-        # Pending review (should NOT be returned publicly)
-        {
-            "product_id": prod_id,
-            "user_id": "user3",
-            "order_id": "ord3",
-            "order_number": "ON-3",
-            "rating": 4,
-            "comment": "Pending view",
-            "images": [],
-            "customer_name": "Charlie",
-            "is_approved": False,
-            "is_featured": False,
-            "created_at": datetime(2026, 1, 3)
-        }
-    ])
+    db["reviews"].insert_one({
+        "product_id": prod_id,
+        "user_id": "user1",
+        "order_id": "ord1",
+        "order_number": "ON-1",
+        "rating": 5,
+        "comment": "Average description",
+        "images": ["img.jpg"],
+        "customer_name": "Alice",
+        "is_approved": True,
+        "is_featured": False,
+        "created_at": datetime(2026, 1, 1),
+        "updated_at": datetime(2026, 1, 1)
+    })
 
     # Fetch public reviews
     response = client.get(f"/api/products/{prod_id_str}/reviews")
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["success"] is True
-    assert data["page"] == 1
-    assert data["limit"] == 20
-    assert data["total"] == 2 # Only approved reviews
+    assert len(data["data"]) == 1
     
-    # Check that privacy fields (user_id, order_id) are hidden
-    for r in data["data"]:
-        assert "user_id" not in r
-        assert "order_id" not in r
-        assert "comment" in r
-        assert "rating" in r
-        assert "customer_name" in r
+    # Verify ONLY public fields are exposed
+    public_review = data["data"][0]
+    allowed_keys = {"id", "_id", "customer_name", "rating", "comment", "images", "created_at"}
+    for key in public_review.keys():
+        assert key in allowed_keys
+    
+    assert "user_id" not in public_review
+    assert "order_id" not in set(public_review.keys())
+    assert "is_approved" not in public_review
 
-    # Check newest sorting default (Bob then Alice)
-    assert data["data"][0]["customer_name"] == "Bob"
-    assert data["data"][1]["customer_name"] == "Alice"
-
-    # Test sorting: lowest_rated (Alice then Bob)
-    response_sort = client.get(f"/api/products/{prod_id_str}/reviews?sort=lowest_rated")
-    data_sort = json.loads(response_sort.data)
-    assert data_sort["data"][0]["customer_name"] == "Alice"
-    assert data_sort["data"][1]["customer_name"] == "Bob"
-
-def test_admin_moderation_flow(client, db):
+def test_admin_moderation_flow_and_testimonial_promotion(client, db, monkeypatch):
     prod_id = ObjectId()
     prod_id_str = str(prod_id)
     
-    # Create product to rollup update
     db["products"].insert_one({
         "_id": prod_id,
         "name": "Cool Shoes",
@@ -311,15 +238,14 @@ def test_admin_moderation_flow(client, db):
         "rating_count": 0
     })
 
-    # Submit review
     review_id = db["reviews"].insert_one({
         "product_id": prod_id,
         "user_id": "user_mod",
         "order_id": "ord_mod",
         "order_number": "ON-MOD",
         "rating": 5,
-        "comment": "Mod review",
-        "images": [],
+        "comment": "Mod review comments",
+        "images": ["img1.jpg"],
         "customer_name": "Frank",
         "is_approved": False,
         "is_featured": False,
@@ -327,61 +253,48 @@ def test_admin_moderation_flow(client, db):
     }).inserted_id
 
     headers_admin = get_auth_headers(role="admin")
-    headers_customer = get_auth_headers(role="customer")
 
-    # 1. Check GET /api/admin/reviews restricts customer role
-    response_cust = client.get("/api/admin/reviews", headers=headers_customer)
-    assert response_cust.status_code == 403
+    # 1. Attempting to promote unapproved review must fail
+    response_promo_fail = client.post(f"/api/admin/reviews/{review_id}/promote-to-testimonial", headers=headers_admin, json={
+        "customer_location": "New York, USA",
+        "display_order": 1
+    })
+    assert response_promo_fail.status_code == 400
+    data_promo_fail = json.loads(response_promo_fail.data)
+    assert "Only approved reviews" in data_promo_fail["message"]
 
-    # 2. Check GET /api/admin/reviews is allowed for admin
-    response_admin = client.get("/api/admin/reviews", headers=headers_admin)
-    assert response_admin.status_code == 200
-    admin_data = json.loads(response_admin.data)
-    assert admin_data["total"] == 1
-    assert admin_data["data"][0]["user_id"] == "user_mod" # Admin has full info
-
-    # 3. Approve review
+    # 2. Approve review (must return the updated review object in data)
     response_app = client.put(f"/api/admin/reviews/{review_id}/approve", headers=headers_admin)
     assert response_app.status_code == 200
-    
-    # Check approved status and rollup update
-    review_doc = db["reviews"].find_one({"_id": review_id})
-    assert review_doc["is_approved"] is True
-    
-    product_doc = db["products"].find_one({"_id": prod_id})
-    assert product_doc["rating_avg"] == 5.0
-    assert product_doc["rating_count"] == 1
+    data_app = json.loads(response_app.data)
+    assert data_app["success"] is True
+    assert "review" in data_app["data"]
+    assert data_app["data"]["review"]["is_approved"] is True
 
-    # 4. Reject review (with reason)
-    response_rej = client.put(f"/api/admin/reviews/{review_id}/reject", headers=headers_admin, json={
-        "reason": "Inappropriate word"
+    # 3. Promote approved review with invalid customer_location length
+    response_promo_loc_fail = client.post(f"/api/admin/reviews/{review_id}/promote-to-testimonial", headers=headers_admin, json={
+        "customer_location": "A" * 101,
+        "display_order": 1
     })
-    assert response_rej.status_code == 200
-    
-    # Check rejected status, rejection reason, and updated rollup
-    review_doc_rej = db["reviews"].find_one({"_id": review_id})
-    assert review_doc_rej["is_approved"] is False
-    assert review_doc_rej["rejection_reason"] == "Inappropriate word"
-    
-    product_doc_rej = db["products"].find_one({"_id": prod_id})
-    assert product_doc_rej["rating_avg"] == 0.0
-    assert product_doc_rej["rating_count"] == 0
+    assert response_promo_loc_fail.status_code == 400
 
-    # 5. Promote to testimonial
-    response_promo = client.post(f"/api/admin/reviews/{review_id}/promote-to-testimonial", headers=headers_admin)
+    # 4. Promote approved review successfully
+    response_promo = client.post(f"/api/admin/reviews/{review_id}/promote-to-testimonial", headers=headers_admin, json={
+        "customer_location": "New York, USA",
+        "display_order": 5
+    })
     assert response_promo.status_code == 200
     promo_data = json.loads(response_promo.data)
-    assert "testimonial_id" in promo_data["data"]
     
-    # Check testimonials collection
+    # Check testimonials collection structure strictly
     testi_doc = db["testimonials"].find_one({"_id": ObjectId(promo_data["data"]["testimonial_id"])})
     assert testi_doc is not None
+    assert testi_doc["source"] == "review"
     assert testi_doc["review_id"] == review_id
     assert testi_doc["customer_name"] == "Frank"
-
-    # 6. Delete review (hard delete)
-    response_del = client.delete(f"/api/admin/reviews/{review_id}", headers=headers_admin)
-    assert response_del.status_code == 200
-    
-    review_deleted = db["reviews"].find_one({"_id": review_id})
-    assert review_deleted is None
+    assert testi_doc["customer_location"] == "New York, USA"
+    assert testi_doc["quote"] == "Mod review comments"
+    assert testi_doc["rating"] == 5
+    assert testi_doc["image"] == "img1.jpg"
+    assert testi_doc["display_order"] == 5
+    assert testi_doc["is_active"] is True

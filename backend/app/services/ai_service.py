@@ -61,7 +61,7 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
         }
 
     # 3. Check Caching tier
-    cache_result = check_cache(category_id, selected_attributes)
+    cache_result = check_cache(category, selected_attributes)
     if cache_result.get("hit"):
         cached_url = cache_result.get("output_image_url")
         prompt_compiled = build_prompt(category, selected_attributes)
@@ -211,7 +211,7 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
 
     # 8. Store in Caching tier and 9. Log successful generation history in DB
     try:
-        store_cache(category_id, selected_attributes, output_image_url)
+        store_cache(category, selected_attributes, output_image_url)
 
         gen_model = AIGeneration(
             user_id=user_id,

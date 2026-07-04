@@ -328,5 +328,71 @@ class TestAIPreviewGeneration(unittest.TestCase):
         # Verify Cloudinary destroy was called for the uploaded image public_id
         mock_destroy.assert_called_once_with("galxy/ai-previews/test_public_id")
 
+    def test_09_schema_driven_text_bypass(self):
+        """Test that caching is bypassed when a free-text field is named something other than custom_text."""
+        cat_id = "test_engraving_category"
+        categories.update_one(
+            {"category_id": cat_id},
+            {"$set": {
+                "category_id": cat_id,
+                "name": "Engraving Test Category",
+                "ai_prompt_template": "A ring with engraving '{engraving}'.",
+                "attribute_schema": [
+                    {"key": "engraving", "label": "Engraving Text", "type": "text_input", "required": True, "affects_ai_preview": True}
+                ]
+            }},
+            upsert=True
+        )
+        
+        payload = {
+            "category_id": cat_id,
+            "selected_attributes": {
+                "engraving": "Love Forever"
+            },
+            "session_id": str(uuid.uuid4())
+        }
+        
+        # Call 1: should bypass cache (from_cache should be False)
+        response1 = self.client.post('/api/ai/generate-preview', 
+                                    data=json.dumps(payload),
+                                    content_type='application/json')
+        data1 = json.loads(response1.data.decode('utf-8'))
+        self.assertEqual(response1.status_code, 200)
+        self.assertFalse(data1["data"]["from_cache"])
+        
+        # Call 2 with same payload: should STILL bypass cache (from_cache should be False)
+        # because "engraving" is registered as a text_input field in the schema.
+        response2 = self.client.post('/api/ai/generate-preview', 
+                                    data=json.dumps(payload),
+                                    content_type='application/json')
+        data2 = json.loads(response2.data.decode('utf-8'))
+        self.assertEqual(response2.status_code, 200)
+        self.assertFalse(data2["data"]["from_cache"])
+        
+        # Cleanup
+        categories.delete_one({"category_id": cat_id})
+
+    def test_10_cache_key_collision_prevention(self):
+        """Test that generate_cache_key prevents key collisions by using JSON serialization."""
+        from app.services.ai_cache_service import generate_cache_key
+        
+        category_id = "test_collision_category"
+        
+        # Two different configurations that would concatenate to the same string under old scheme:
+        attrs_a = {
+            "font": "cursivecolor",
+            "color": "blue"
+        }
+        attrs_b = {
+            "font": "cursive",
+            "color": "colorblue"
+        }
+        
+        key_a = generate_cache_key(category_id, attrs_a)
+        key_b = generate_cache_key(category_id, attrs_b)
+        
+        # Verify that their hash keys are distinct
+        self.assertNotEqual(key_a, key_b)
+
 if __name__ == '__main__':
     unittest.main()

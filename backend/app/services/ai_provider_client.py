@@ -43,6 +43,9 @@ def generate_preview_image(prompt):
 
 def get_mock_image_bytes(prompt):
     """Generates mock image bytes by downloading a high-quality product mockup or using base64 fallback."""
+    # Fast mock: return local placeholder bytes instantly in Mock AI mode to eliminate network dependency/latency
+    if MOCK_AI:
+        return base64.b64decode(TINY_PNG_B64)
     # List of high-quality custom product mockups from Unsplash based on keywords
     default_url = "https://images.unsplash.com/photo-1563245372-f21724e3856d?q=80&w=600&auto=format&fit=crop" # Neon sign mockup
     

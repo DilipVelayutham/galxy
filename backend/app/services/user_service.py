@@ -1,7 +1,7 @@
 from bson import ObjectId
 from app.models.user import User
 from app.models.address import ValidationError
-from datetime import datetime
+from datetime import datetime, timezone
 
 def get_profile(user_id):
     """
@@ -35,7 +35,7 @@ def update_profile(user_id, data):
     if not validated:
         raise ValidationError({"message": "No valid profile fields provided for update."})
         
-    validated['updated_at'] = datetime.utcnow()
+    validated['updated_at'] = datetime.now(timezone.utc)
     
     user = db.users.find_one_and_update(
         {"_id": user_oid},

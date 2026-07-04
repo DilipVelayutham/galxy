@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch
 
 # Ensure backend root is in the python path
@@ -92,17 +92,19 @@ class TestValidators(unittest.TestCase):
 
 
 class TestAuthService(unittest.TestCase):
-    @patch('app.services.auth_service.db')
-    @patch('app.services.auth_service.send_reset_email')
-    def test_forgot_password_user_exists(self, mock_send_email, mock_db):
-        from app.services.auth_service import forgot_password
+    @patch('app.services.auth_service.get_db')
+    @patch('app.services.auth_service._send_reset_email')
+    def test_forgot_password_user_exists(self, mock_send_email, mock_get_db):
+        from app.services.auth_service import AuthService
         
         # Setup mocks
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
         mock_user = {"_id": "1", "email": "test@example.com"}
         mock_db.users.find_one.return_value = mock_user
         mock_db.password_resets.insert_one = MagicMock()
         
-        result = forgot_password("test@example.com")
+        result = AuthService.forgot_password("test@example.com")
         
         # Assertions
         self.assertTrue(result["success"])
@@ -119,17 +121,19 @@ class TestAuthService(unittest.TestCase):
         now = datetime.now(timezone.utc)
         self.assertTrue(now < expires_at < now + timedelta(minutes=31))
 
-    @patch('app.services.auth_service.db')
-    @patch('app.services.auth_service.send_reset_email')
-    def test_forgot_password_user_not_exists(self, mock_send_email, mock_db):
-        from app.services.auth_service import forgot_password
+    @patch('app.services.auth_service.get_db')
+    @patch('app.services.auth_service._send_reset_email')
+    def test_forgot_password_user_not_exists(self, mock_send_email, mock_get_db):
+        from app.services.auth_service import AuthService
         
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
         mock_db.users.find_one.return_value = None
         mock_db.password_resets.insert_one = MagicMock()
         
         # Measure time elapsed to verify dummy bcrypt operations
         start_time = time.time()
-        result = forgot_password("nonexistent@example.com")
+        result = AuthService.forgot_password("nonexistent@example.com")
         duration = time.time() - start_time
         
         # Assertions
@@ -140,12 +144,14 @@ class TestAuthService(unittest.TestCase):
         # Verify timing protection was applied (bcrypt rounds=12 takes > 50ms)
         self.assertGreaterEqual(duration, 0.05, "Timing mitigation was too fast, enumeration possible!")
 
-    @patch('app.services.auth_service.db')
+    @patch('app.services.auth_service.get_db')
     @patch('app.services.auth_service.hash_password')
-    def test_reset_password_success(self, mock_hash, mock_db):
-        from app.services.auth_service import reset_password
+    def test_reset_password_success(self, mock_hash, mock_get_db):
+        from app.services.auth_service import AuthService
         
         # 1. Setup Mock Reset Record
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
         mock_reset = {
             "_id": "reset_id",
             "email": "test@example.com",
@@ -159,7 +165,7 @@ class TestAuthService(unittest.TestCase):
         mock_hash.return_value = "mocked_new_hash"
         
         # Call service
-        result = reset_password("valid_token", "NewSecure123!")
+        result = AuthService.reset_password("valid_token", "NewSecure123!")
         
         # Assertions
         self.assertTrue(result["success"])
@@ -177,11 +183,13 @@ class TestAuthService(unittest.TestCase):
             {"$set": {"is_used": True, "used_at": unittest.mock.ANY}}
         )
 
-    @patch('app.services.auth_service.db')
-    def test_reset_password_expired_token(self, mock_db):
-        from app.services.auth_service import reset_password
+    @patch('app.services.auth_service.get_db')
+    def test_reset_password_expired_token(self, mock_get_db):
+        from app.services.auth_service import AuthService
         
         # Setup expired reset record
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
         mock_reset = {
             "_id": "reset_id",
             "email": "test@example.com",
@@ -190,7 +198,7 @@ class TestAuthService(unittest.TestCase):
         }
         mock_db.password_resets.find_one.return_value = mock_reset
         
-        result = reset_password("expired_token", "NewSecure123!")
+        result = AuthService.reset_password("expired_token", "NewSecure123!")
         self.assertFalse(result["success"])
         self.assertEqual(result["message"], "Invalid or expired token")
         mock_db.users.update_one.assert_not_called()
@@ -202,7 +210,7 @@ class TestAuthRoutes(unittest.TestCase):
         self.app.register_blueprint(auth_bp, url_prefix='/api/auth')
         self.client = self.app.test_client()
 
-    @patch('app.routes.auth_routes.forgot_password')
+    @patch('app.routes.auth_routes.AuthService.forgot_password')
     def test_forgot_password_route(self, mock_forgot_pw):
         mock_forgot_pw.return_value = {
             "success": True,
@@ -223,7 +231,7 @@ class TestAuthRoutes(unittest.TestCase):
         self.assertFalse(data["success"])
         self.assertIn("email", data["errors"])
 
-    @patch('app.routes.auth_routes.reset_password')
+    @patch('app.routes.auth_routes.AuthService.reset_password')
     def test_reset_password_route(self, mock_reset_pw):
         mock_reset_pw.return_value = {
             "success": True,

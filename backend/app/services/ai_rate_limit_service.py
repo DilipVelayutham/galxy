@@ -98,7 +98,13 @@ def check_rate_limit(session_id: str, user_id: str | None) -> RateLimitResult:
                 AI_MAX_GENERATIONS_PER_USER_PER_DAY,
             )
         except Exception as exc:
-            logger.error("[rate_limit] DB error during user count: %s", exc)
+            logger.error("[rate_limit] DB error during user count: %s. Failing closed.", exc)
+            return RateLimitResult(
+                allowed=False,
+                limit_reached=True,
+                limit_scope="user",
+                message="Rate limiting service is temporarily unavailable. Please try again later.",
+            )
 
     # 2. Guest limit check (Lifetime per session_id)
     else:
@@ -130,7 +136,13 @@ def check_rate_limit(session_id: str, user_id: str | None) -> RateLimitResult:
                 AI_FREE_GENERATIONS_PER_SESSION,
             )
         except Exception as exc:
-            logger.error("[rate_limit] DB error during guest count: %s", exc)
+            logger.error("[rate_limit] DB error during guest count: %s. Failing closed.", exc)
+            return RateLimitResult(
+                allowed=False,
+                limit_reached=True,
+                limit_scope="guest",
+                message="Rate limiting service is temporarily unavailable. Please try again later.",
+            )
 
     return RateLimitResult(
         allowed=True,

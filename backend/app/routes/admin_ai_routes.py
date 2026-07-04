@@ -3,8 +3,7 @@ admin_ai_routes.py — Module 5 AI Preview Generation
 Admin-only routes for AI usage analytics.
 
 OWNER: Backend Member 2 (Gokul — T4)
-This stub is provided so the app initializes correctly and the route is
-registered. Backend Member 2 will implement the full logic.
+This file implements the full administrative route logic.
 
 Routes:
   GET /api/admin/ai/generations

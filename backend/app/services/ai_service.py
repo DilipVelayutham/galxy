@@ -109,7 +109,47 @@ def generate_preview(
             error_message=validation_result.get("message", "Invalid attributes."),
         )
 
-    # ── Step 3: Cache check (Bypasses rate limiting on HIT) ───────────────────────
+    # ── Step 3: Rate limit check ──────────────────────────────────────────────────
+    rate_result = ai_rate_limit_service.check_rate_limit(
+        session_id=session_id,
+        user_id=user_id,
+    )
+    if not rate_result.allowed:
+        logger.info(
+            "[ai_service] Rate limit exceeded: scope=%s session=%s user=%s",
+            rate_result.limit_scope,
+            session_id,
+            user_id,
+        )
+        # Log rate-limited generation.
+        try:
+            doc = ai_gen_model.build_document(
+                user_id=ObjectId(user_id) if user_id else None,
+                session_id=session_id,
+                category_id=ObjectId(category_id),
+                product_id=ObjectId(product_id) if product_id else None,
+                selected_attributes=selected_attributes,
+                prompt_used="(rate limited)",
+                input_reference_image=input_reference_image,
+                output_image_url="",
+                provider=AI_PROVIDER,
+                status="rate_limited",
+                error_message=rate_result.message,
+                generation_time_ms=0,
+            )
+            ai_gen_model.insert_generation(doc)
+        except Exception as exc:
+            logger.error("[ai_service] Failed to log rate-limited generation: %s", exc)
+
+        return GenerationResult(
+            success=False,
+            error_code=429,
+            error_message=rate_result.message,
+            limit_reached=True,
+            limit_scope=rate_result.limit_scope,
+        )
+
+    # ── Step 4: Cache check ───────────────────────────────────────────────────────
     # If a cache entry is hit, serve it directly without decrementing user quotas.
     use_cache = not ai_cache_service.has_custom_text(selected_attributes, category)
 
@@ -141,26 +181,6 @@ def generate_preview(
                 generation_id=gen_id,
                 from_cache=True,
             )
-
-    # ── Step 4: Rate limit check (Cache Misses only) ──────────────────────────────
-    rate_result = ai_rate_limit_service.check_rate_limit(
-        session_id=session_id,
-        user_id=user_id,
-    )
-    if not rate_result.allowed:
-        logger.info(
-            "[ai_service] Rate limit exceeded: scope=%s session=%s user=%s",
-            rate_result.limit_scope,
-            session_id,
-            user_id,
-        )
-        return GenerationResult(
-            success=False,
-            error_code=429,
-            error_message=rate_result.message,
-            limit_reached=True,
-            limit_scope=rate_result.limit_scope,
-        )
 
     # ── Step 5: Build prompt ──────────────────────────────────────────────────────
     try:

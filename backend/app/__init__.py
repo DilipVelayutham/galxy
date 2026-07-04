@@ -4,6 +4,7 @@ Creates and configures the Flask app, registers blueprints, and ensures
 MongoDB indexes are created at startup.
 """
 import logging
+import os
 from flask import Flask
 from flask_cors import CORS
 
@@ -24,7 +25,8 @@ def create_app() -> Flask:
     # ── CORS ───────────────────────────────────────────────────────────────────────
     # Allow the GALXY frontend (React/Next.js) to call this backend.
     # Tighten origins in production to the deployed frontend URL.
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    frontend_origin = os.getenv("FRONTEND_ORIGIN", "*")
+    CORS(app, resources={r"/api/*": {"origins": frontend_origin}})
 
     # ── Register blueprints ────────────────────────────────────────────────────────
     app.register_blueprint(ai_bp)

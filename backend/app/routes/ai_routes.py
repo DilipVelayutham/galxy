@@ -4,13 +4,9 @@ Flask Blueprint for all AI Preview routes.
 
 ROUTE OWNERSHIP:
   POST /api/ai/generate-preview         ← Backend Member 1 (T1, this file)
-  GET  /api/ai/generations/:user_id     ← Backend Member 2 (T4, stub here)
+  GET  /api/ai/generations/:user_id     ← Backend Member 2 (T4, this file)
 
-The GET history route is stubbed here with a clear ownership comment so
-Backend Member 2 can take it over without a merge conflict on the same file.
-Per spec warning (§workflow): agree in advance — consider splitting into
-ai_routes.py (POST only) + ai_history_routes.py (GET history/admin) to avoid
-Day 3 merge conflicts.
+Both routes are fully implemented and integrated.
 """
 import logging
 from flask import Blueprint, request, jsonify, g
@@ -125,7 +121,7 @@ def generate_preview_route():
 # ─────────────────────────────────────────────────────────────────────────────────
 # GET /api/ai/generations/<user_id>
 # OWNER: Backend Member 2 (Gokul — T4)
-# Stub: returns live data from model but final implementation/auth guard is Gokul's.
+# Fully implemented history retrieval endpoint with proper authorization checks.
 # ─────────────────────────────────────────────────────────────────────────────────
 @ai_bp.route("/generations/<string:user_id>", methods=["GET"])
 @require_auth

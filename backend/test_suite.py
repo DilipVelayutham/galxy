@@ -1,5 +1,6 @@
 import json
 import unittest
+import unittest.mock
 import uuid
 import datetime
 from bson import ObjectId
@@ -240,6 +241,73 @@ class TestAIPreviewGeneration(unittest.TestCase):
         data_p2 = json.loads(resp_p2.data.decode('utf-8'))
         self.assertEqual(len(data_p2["data"]), 1)
         self.assertFalse(data_p2["has_more"])
+
+    def test_07_rate_limiting_by_ip(self):
+        """Test guest user rate limit block by IP address when session_id changes (incognito bypass attempt)."""
+        ip_addr = "192.168.1.99"
+        payload = {
+            "category_id": self.category_id,
+            "selected_attributes": {
+                "style": "tshirt",
+                "color": "black",
+                "custom_text": "LTI"
+            }
+        }
+        
+        # 5 calls from the same IP, but with different session_ids, should be allowed
+        for i in range(5):
+            payload["session_id"] = f"session_{i}_{uuid.uuid4()}"
+            payload["selected_attributes"]["custom_text"] = f"LTI {i}"
+            response = self.client.post('/api/ai/generate-preview', 
+                                       environ_base={'REMOTE_ADDR': ip_addr},
+                                       data=json.dumps(payload),
+                                       content_type='application/json')
+            self.assertEqual(response.status_code, 200)
+            
+        # 6th call from the same IP with a new session_id must be blocked by IP rate limit
+        payload["session_id"] = f"session_bypass_{uuid.uuid4()}"
+        payload["selected_attributes"]["custom_text"] = "LTI Blocked IP"
+        response = self.client.post('/api/ai/generate-preview', 
+                                   environ_base={'REMOTE_ADDR': ip_addr},
+                                   data=json.dumps(payload),
+                                   content_type='application/json')
+        self.assertEqual(response.status_code, 429)
+        data = json.loads(response.data.decode('utf-8'))
+        self.assertEqual(data["data"]["limit_scope"], "ip")
+
+    @unittest.mock.patch('cloudinary.uploader.upload')
+    @unittest.mock.patch('cloudinary.uploader.destroy')
+    @unittest.mock.patch('app.database.ai_generations.insert_one')
+    def test_08_cloudinary_orphan_rollback(self, mock_insert_one, mock_destroy, mock_upload):
+        """Test that Cloudinary upload is rolled back if database insertion fails."""
+        # Mock successful Cloudinary upload
+        mock_upload.return_value = {
+            "secure_url": "https://res.cloudinary.com/test/image/upload/v1/test.png",
+            "public_id": "galxy/ai-previews/test_public_id"
+        }
+        
+        # Mock database insertion error
+        mock_insert_one.side_effect = Exception("Simulated database failure")
+        
+        payload = {
+            "category_id": self.category_id,
+            "selected_attributes": {
+                "style": "tshirt",
+                "color": "black",
+                "custom_text": "Rollback Test"
+            },
+            "session_id": "session_rollback_test"
+        }
+        
+        response = self.client.post('/api/ai/generate-preview', 
+                                   data=json.dumps(payload),
+                                   content_type='application/json')
+        
+        # Should return 502 error
+        self.assertEqual(response.status_code, 502)
+        
+        # Verify Cloudinary destroy was called for the uploaded image public_id
+        mock_destroy.assert_called_once_with("galxy/ai-previews/test_public_id")
 
 if __name__ == '__main__':
     unittest.main()

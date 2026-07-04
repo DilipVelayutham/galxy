@@ -24,7 +24,7 @@ cloudinary.config(
     api_secret=CLOUDINARY_API_SECRET
 )
 
-def generate_preview(category_id, selected_attributes, user_id=None, session_id=None, product_id=None):
+def generate_preview(category_id, selected_attributes, user_id=None, session_id=None, ip_address=None, product_id=None):
     """
     Orchestrates the entire AI Preview Generation Pipeline:
     1. Validation (Module 4)
@@ -71,6 +71,7 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
             gen_model = AIGeneration(
                 user_id=user_id,
                 session_id=session_id,
+                ip_address=ip_address,
                 category_id=category_id,
                 product_id=product_id,
                 selected_attributes=selected_attributes,
@@ -99,13 +100,14 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
         }
 
     # 4. Check Rate Limiting tier
-    rate_result = check_rate_limit(user_id=user_id, session_id=session_id)
+    rate_result = check_rate_limit(user_id=user_id, session_id=session_id, ip_address=ip_address)
     if not rate_result.get("allowed"):
         # Log rate limited state in DB using AIGeneration model
         try:
             gen_model = AIGeneration(
                 user_id=user_id,
                 session_id=session_id,
+                ip_address=ip_address,
                 category_id=category_id,
                 product_id=product_id,
                 selected_attributes=selected_attributes,
@@ -145,6 +147,7 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
             gen_model = AIGeneration(
                 user_id=user_id,
                 session_id=session_id,
+                ip_address=ip_address,
                 category_id=category_id,
                 product_id=product_id,
                 selected_attributes=selected_attributes,
@@ -166,6 +169,7 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
         }
 
     # 7. Upload to Cloudinary (under folder galxy/ai-previews/)
+    public_id = None
     try:
         upload_result = cloudinary.uploader.upload(
             image_bytes,
@@ -173,6 +177,7 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
             allowed_formats=["png", "jpg", "jpeg", "webp"]
         )
         output_image_url = upload_result.get("secure_url")
+        public_id = upload_result.get("public_id")
         if not output_image_url:
             raise Exception("Cloudinary secure_url missing from upload response.")
     except Exception as e:
@@ -183,6 +188,7 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
             gen_model = AIGeneration(
                 user_id=user_id,
                 session_id=session_id,
+                ip_address=ip_address,
                 category_id=category_id,
                 product_id=product_id,
                 selected_attributes=selected_attributes,
@@ -203,14 +209,14 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
             "message": "Failed to store generated image."
         }
 
-    # 8. Store in Caching tier
-    store_cache(category_id, selected_attributes, output_image_url)
-
-    # 9. Log successful generation history in DB using AIGeneration model
+    # 8. Store in Caching tier and 9. Log successful generation history in DB
     try:
+        store_cache(category_id, selected_attributes, output_image_url)
+
         gen_model = AIGeneration(
             user_id=user_id,
             session_id=session_id,
+            ip_address=ip_address,
             category_id=category_id,
             product_id=product_id,
             selected_attributes=selected_attributes,
@@ -224,8 +230,41 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
         log_result = ai_generations.insert_one(gen_model.to_dict())
         generation_id = str(log_result.inserted_id)
     except Exception as e:
-        print(f"[Orchestrator] Error logging successful generation: {e}")
-        generation_id = "success_unlogged"
+        print(f"[Orchestrator] Error saving database record or cache: {e}")
+        # Perform Cloudinary Rollback (Orphan Handling)
+        if public_id:
+            try:
+                cloudinary.uploader.destroy(public_id)
+                print(f"[Orchestrator] Rolled back Cloudinary image (destroyed orphan): {public_id}")
+            except Exception as destroy_err:
+                print(f"[Orchestrator] Failed to destroy orphaned Cloudinary image {public_id}: {destroy_err}")
+        
+        # Log failure in DB
+        error_msg = f"Database save failed after Cloudinary upload: {str(e)}"
+        try:
+            gen_model = AIGeneration(
+                user_id=user_id,
+                session_id=session_id,
+                ip_address=ip_address,
+                category_id=category_id,
+                product_id=product_id,
+                selected_attributes=selected_attributes,
+                prompt_used=prompt_compiled,
+                output_image_url="",
+                provider=AI_PROVIDER,
+                status="failed",
+                error_message=error_msg,
+                generation_time_ms=generation_time_ms
+            )
+            ai_generations.insert_one(gen_model.to_dict())
+        except Exception as log_err:
+            print(f"[Orchestrator] Error logging database save error: {log_err}")
+            
+        return {
+            "success": False,
+            "status": 502,
+            "message": "Failed to store generated image."
+        }
 
     # 10. Return success response payload
     return {

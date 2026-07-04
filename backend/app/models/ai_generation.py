@@ -7,11 +7,12 @@ class AIGeneration:
     Adheres strictly to the document schema.
     """
     def __init__(self, category_id, selected_attributes, output_image_url, 
-                 user_id=None, session_id=None, product_id=None, prompt_used="", 
+                 user_id=None, session_id=None, ip_address=None, product_id=None, prompt_used="", 
                  input_reference_image=None, provider="gemini", status="success", 
                  error_message=None, generation_time_ms=0, created_at=None):
         self.user_id = user_id
         self.session_id = session_id
+        self.ip_address = ip_address
         self.category_id = category_id
         self.product_id = product_id
         self.selected_attributes = selected_attributes
@@ -51,6 +52,7 @@ class AIGeneration:
         return {
             "user_id": user_obj_id,
             "session_id": self.session_id,
+            "ip_address": self.ip_address,
             "category_id": cat_obj_id,
             "product_id": prod_obj_id,
             "selected_attributes": self.selected_attributes,
@@ -72,6 +74,7 @@ class AIGeneration:
         return AIGeneration(
             user_id=doc.get("user_id"),
             session_id=doc.get("session_id"),
+            ip_address=doc.get("ip_address"),
             category_id=doc.get("category_id"),
             product_id=doc.get("product_id"),
             selected_attributes=doc.get("selected_attributes"),

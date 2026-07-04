@@ -45,11 +45,17 @@ def handle_generate_preview():
             "message": "selected_attributes dictionary is required."
         }), 400
 
+    # Extract client IP address, handling proxies via X-Forwarded-For
+    ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if ip_address and ',' in ip_address:
+        ip_address = ip_address.split(',')[0].strip()
+
     result = generate_preview(
         category_id=category_id,
         selected_attributes=selected_attributes,
         user_id=user_id,
         session_id=session_id,
+        ip_address=ip_address,
         product_id=product_id
     )
     

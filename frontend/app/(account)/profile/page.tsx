@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, Phone, Mail, Save, AlertTriangle, CheckCircle, Loader } from 'lucide-react';
+import { useAuth } from '../../../hooks/useAuth';
+import { getApiUrl } from '../../../utils/api';
 
 interface UserProfile {
   name: string;
@@ -10,6 +12,7 @@ interface UserProfile {
 }
 
 export default function ProfilePage() {
+  const { getAccessToken } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [formData, setFormData] = useState({ name: '', phone: '' });
   const [isLoading, setIsLoading] = useState(true);
@@ -24,8 +27,8 @@ export default function ProfilePage() {
   const fetchProfile = async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch('/api/user/profile', {
+      const token = getAccessToken();
+      const res = await fetch(getApiUrl('/api/user/profile'), {
         headers: {
           'Authorization': `Bearer ${token || ''}`,
           'Content-Type': 'application/json'
@@ -70,8 +73,8 @@ export default function ProfilePage() {
 
     setIsSaving(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch('/api/user/profile', {
+      const token = getAccessToken();
+      const res = await fetch(getApiUrl('/api/user/profile'), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token || ''}`,

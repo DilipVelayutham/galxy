@@ -14,10 +14,16 @@ def get_profile():
     Returns name, email, phone, and addresses list of the authenticated user.
     """
     profile = to_public_dict(request.user)
+    trimmed_profile = {
+        "name": profile.get("name"),
+        "email": profile.get("email"),
+        "phone": profile.get("phone"),
+        "addresses": profile.get("addresses")
+    }
     return jsonify({
         "success": True,
         "message": "Profile retrieved successfully.",
-        "data": profile
+        "data": trimmed_profile
     }), 200
 
 @user_bp.route('/profile', methods=['PUT'])
@@ -30,10 +36,17 @@ def update_profile():
     data = request.get_json() or {}
     try:
         updated_user = user_service.update_profile(request.user['_id'], data)
+        profile = to_public_dict(updated_user)
+        trimmed_profile = {
+            "name": profile.get("name"),
+            "email": profile.get("email"),
+            "phone": profile.get("phone"),
+            "addresses": profile.get("addresses")
+        }
         return jsonify({
             "success": True,
             "message": "Profile updated successfully.",
-            "data": to_public_dict(updated_user)
+            "data": trimmed_profile
         }), 200
     except ValidationError as e:
         return jsonify({

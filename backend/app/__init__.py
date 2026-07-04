@@ -1,3 +1,11 @@
+# ==============================================================================
+# LOCAL-TESTING STUB ONLY (NOT A DELIVERABLE)
+# ==============================================================================
+# This __init__.py file and its create_app/CORS setup are temporary stubs
+# for local testing. They are NOT owned by Module 1 (Auth Accounts) and must
+# be removed or replaced by in1's integrated app at merge time.
+# ==============================================================================
+
 import os
 from flask import Flask
 from flask_cors import CORS

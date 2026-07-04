@@ -2,10 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, MapPin, Loader, AlertTriangle, CheckCircle } from 'lucide-react';
-import { AddressCard, Address } from '../../components/account/AddressCard';
-import { AddressForm } from '../../components/account/AddressForm';
+import { AddressCard, Address } from '../../../components/account/AddressCard';
+import { AddressForm } from '../../../components/account/AddressForm';
+import { useAuth } from '../../../hooks/useAuth';
+import { getApiUrl } from '../../../utils/api';
 
 export default function AddressesPage() {
+  const { getAccessToken } = useAuth();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -21,8 +24,8 @@ export default function AddressesPage() {
   const fetchAddresses = async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch('/api/user/profile', {
+      const token = getAccessToken();
+      const res = await fetch(getApiUrl('/api/user/profile'), {
         headers: {
           'Authorization': `Bearer ${token || ''}`,
           'Content-Type': 'application/json'
@@ -55,9 +58,9 @@ export default function AddressesPage() {
     setIsSaving(true);
     setStatus(null);
     try {
-      const token = localStorage.getItem('access_token');
+      const token = getAccessToken();
       const isEdit = !!formData._id;
-      const url = isEdit ? `/api/user/addresses/${formData._id}` : '/api/user/addresses';
+      const url = isEdit ? getApiUrl(`/api/user/addresses/${formData._id}`) : getApiUrl('/api/user/addresses');
       const method = isEdit ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
@@ -107,8 +110,8 @@ export default function AddressesPage() {
 
     setStatus(null);
     try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch(`/api/user/addresses/${addressId}`, {
+      const token = getAccessToken();
+      const res = await fetch(getApiUrl(`/api/user/addresses/${addressId}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token || ''}`,
@@ -149,9 +152,9 @@ export default function AddressesPage() {
     );
 
     try {
-      const token = localStorage.getItem('access_token');
+      const token = getAccessToken();
       // Trigger API update
-      const res = await fetch(`/api/user/addresses/${addressId}`, {
+      const res = await fetch(getApiUrl(`/api/user/addresses/${addressId}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token || ''}`,

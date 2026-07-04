@@ -1,3 +1,11 @@
+# ==============================================================================
+# LOCAL-TESTING STUB ONLY (NOT A DELIVERABLE)
+# ==============================================================================
+# This is a temporary development/testing mock implementation of the authentication
+# middleware. This file is NOT owned by Module 1 (Auth Accounts) and must be
+# deleted and replaced by Module 1's main integrated app (owned by in1) at merge time.
+# ==============================================================================
+
 import jwt
 from flask import request, jsonify
 from functools import wraps

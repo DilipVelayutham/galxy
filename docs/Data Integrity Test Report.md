@@ -26,6 +26,8 @@ This report outlines the verification results of the critical database invariant
 * **Implementation**:
   * Before deleting an address with `is_default = True`, the service scans the `orders` collection for any order belonging to the user that is in a pending state.
   * **Pending States Checked**: `received`, `reviewed`, `quote_sent`, `confirmed`, `in_production`, `ready`, `out_for_delivery`.
+  > [!NOTE]
+  > **Note on Pending States**: The list of pending statuses was assumed based on the master plan's order-status enum. This list is pending final confirmation/sign-off from the Module 8 (Orders) team.
   * If a pending order is found, the deletion is rejected with a validation error to prevent checkout shipping desyncs.
 * **Test Case**: `test_delete_default_address_blocked_by_pending_order`
 * **Status**: **PASSED**

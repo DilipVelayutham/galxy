@@ -1,6 +1,11 @@
 from flask import Flask
 from pymongo import MongoClient
 import cloudinary
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from app.configs.ai_config import AIConfig
 
 db = None
@@ -12,7 +17,12 @@ def create_app(config_class=AIConfig):
     
     # Initialize MongoDB Client
     client = MongoClient(app.config["MONGO_URI"])
-    db = client.get_default_database()
+    try:
+        db = client.get_default_database()
+    except Exception:
+        import os
+        db_name = os.getenv("MONGO_DB_NAME", "galxy")
+        db = client[db_name]
     
     # Configure Cloudinary if keys are present
     if app.config.get("CLOUDINARY_CLOUD_NAME"):

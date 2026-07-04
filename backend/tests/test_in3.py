@@ -253,5 +253,55 @@ class TestAuthRoutes(unittest.TestCase):
         self.assertFalse(data["success"])
         self.assertEqual(data["message"], "Invalid or expired token")
 
+    @patch('app.utils.rate_limiter.db')
+    @patch('app.routes.auth_routes.forgot_password')
+    def test_forgot_password_rate_limiting(self, mock_forgot_pw, mock_db):
+        mock_forgot_pw.return_value = {
+            "success": True,
+            "message": "Generic success message"
+        }
+        
+        # Simulate 5 requests in last 15 mins
+        mock_db.rate_limits.count_documents.return_value = 5
+        
+        response = self.client.post('/api/auth/forgot-password', json={"email": "test@example.com"})
+        
+        self.assertEqual(response.status_code, 429)
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("Rate limit exceeded", data["errors"]["email"])
+
+    @patch('app.routes.auth_routes.reset_password')
+    def test_reset_password_error_field_mapping(self, mock_reset_pw):
+        # 1. Test token issue mapping
+        mock_reset_pw.return_value = {
+            "success": False,
+            "message": "Invalid or expired token",
+            "error_field": "token"
+        }
+        response = self.client.post('/api/auth/reset-password', json={
+            "token": "bad_token",
+            "new_password": "NewPassword123!"
+        })
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertEqual(data["errors"], {"token": "Invalid or expired token"})
+        
+        # 2. Test password strength issue mapping
+        mock_reset_pw.return_value = {
+            "success": False,
+            "message": "Password must contain at least one letter",
+            "error_field": "new_password"
+        }
+        response = self.client.post('/api/auth/reset-password', json={
+            "token": "valid_token",
+            "new_password": "12345678"
+        })
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertEqual(data["errors"], {"new_password": "Password must contain at least one letter"})
+
 if __name__ == '__main__':
     unittest.main()

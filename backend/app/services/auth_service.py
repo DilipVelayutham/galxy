@@ -38,10 +38,11 @@ If you did not request this, please ignore this email.
     
     # Fallback to local console log if SMTP credentials are not configured
     if not all([smtp_host, smtp_port, smtp_email, smtp_password]):
+        masked_link = f"{frontend_url}/reset-password?token={token[:6]}..."
         print(f"\n--- [SMTP MOCK EMAIL] ---")
         print(f"To: {email}")
         print(f"Subject: {subject}")
-        print(f"Reset Link: {reset_link}")
+        print(f"Reset Link (Masked): {masked_link}")
         print(f"-------------------------\n")
         return True
 
@@ -120,7 +121,8 @@ def reset_password(token: str, new_password: str) -> dict:
     if not token:
         return {
             "success": False,
-            "message": "Token is required"
+            "message": "Token is required",
+            "error_field": "token"
         }
 
     # 1. Hash the incoming token to match database storage
@@ -135,7 +137,8 @@ def reset_password(token: str, new_password: str) -> dict:
     if not reset_record:
         return {
             "success": False,
-            "message": "Invalid or expired token"
+            "message": "Invalid or expired token",
+            "error_field": "token"
         }
 
     # 3. Check expiration
@@ -149,7 +152,8 @@ def reset_password(token: str, new_password: str) -> dict:
     if expires_at < now:
         return {
             "success": False,
-            "message": "Invalid or expired token"
+            "message": "Invalid or expired token",
+            "error_field": "token"
         }
 
     # 4. Validate new password strength
@@ -157,7 +161,8 @@ def reset_password(token: str, new_password: str) -> dict:
     if not is_valid:
         return {
             "success": False,
-            "message": err_msg
+            "message": err_msg,
+            "error_field": "new_password"
         }
 
     # 5. Hash the password and update the user record
@@ -173,7 +178,8 @@ def reset_password(token: str, new_password: str) -> dict:
     if update_result.matched_count == 0:
         return {
             "success": False,
-            "message": "Associated user account could not be found"
+            "message": "Associated user account could not be found",
+            "error_field": "token"
         }
 
     # 6. Invalidate the token (single-use constraint)

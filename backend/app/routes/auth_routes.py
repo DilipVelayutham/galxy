@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify
 from app.services.auth_service import forgot_password, reset_password
+from app.utils.rate_limiter import rate_limit_forgot_password
 
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/forgot-password', methods=['POST'])
+@rate_limit_forgot_password
 def handle_forgot_password():
     """
     POST /api/auth/forgot-password
@@ -62,10 +64,11 @@ def handle_reset_password():
     result = reset_password(token, new_password)
     
     if not result["success"]:
+        error_field = result.get("error_field", "new_password")
         return jsonify({
             "success": False,
             "message": result["message"],
-            "errors": {"new_password": result["message"]}
+            "errors": {error_field: result["message"]}
         }), 400
         
     return jsonify({

@@ -13,6 +13,14 @@
   - Integration & Code Review
   - Frontend: AuthContext, AuthGuard, AuthForm, Signup Page, Login Page, Session Management
 
+### Naresh Kumar (Profile & Address Developer)
+- Branch: `in2-naresh`
+- Responsibilities:
+  - User Profile, Address CRUD
+  - User Service, Address Service
+  - User Model
+  - Frontend: Profile Page, Address Page, AddressCard, AddressForm
+
 ### Arun Kumar (Backend Developer — Admin Identity, Testing & Documentation)
 - Branch: `in4-arun`
 - Responsibilities:

@@ -1,0 +1,274 @@
+﻿GALXY â€” MODULE 1: AUTH & USER ACCOUNTS
+NARESH KUMAR â€” PROFILE & ADDRESS DEVELOPER
+MODULE EXECUTION DOCUMENT
+
+Intern Information
+Intern Code: GLX-M1-02
+Role: Backend Developer â€” Profile & Address Domain
+Team: Module 1 â€” Auth & User Accounts
+Branch Name: in2-naresh
+Primary Responsibility:
+User Profile Management, Address CRUD, User Service Layer, Address Service Layer, User Model Ownership.
+Reports To: Dilip Velayutham (Team Lead, Module 1)
+Review Cycle: Continuous â€” per milestone review
+Timeline: Module 1 delivery cycle (parallel with 11 other module teams)
+Priority Level: HIGH
+Your Role In The Project
+You are responsible for everything a signed-in customer's identity looks like beyond the token itself: their profile fields and their saved delivery addresses.
+Every order, cart item, and delivery in the platform ultimately needs a name, phone number, and address. Module 8 (Orders) reads directly from the data and lookups you build for its customer_snapshot. If your service layer is unreliable, order data becomes unreliable.
+Without your work:
+Customers cannot view or edit their profile
+Customers cannot save, edit, or delete delivery addresses
+Checkout (Module 8) has no address data to attach to an order
+Other modules have no safe, sanctioned way to fetch a user's display name or email
+
+Your responsibility is NOT:
+Building signup, login, tokens, or middleware (owned by in1)
+Building password recovery or SMTP integration (owned by in3)
+Building admin authentication (owned by in4)
+Building any frontend component outside the profile/address domain (auth pages are in1â€™s, password-recovery pages are in3â€™s, admin UI is in4â€™s)
+
+Your responsibility IS:
+Owning the addresses[] data shape on the users collection
+Building the profile read/update service and routes
+Building the full address CRUD service and routes
+Enforcing the single-default-address invariant server-side
+Exposing a safe, shared user-lookup function for every other module to call
+Coordinating your work against in1's auth contract as soon as it is published
+Building the /account/profile and /account/addresses pages
+Building the AddressCard and AddressForm (modal or inline) components
+Implementing optimistic UI for default-address switching, confirmed by the server response
+Module Mission
+By the end of this module, the following must all be true:
+âœ“  Profile read/update endpoints function correctly
+âœ“  Address CRUD endpoints function correctly
+âœ“  The single-default-address rule is enforced server-side, not trusted from the client
+âœ“  get_public_profile() is published and used by every module that needs user display data
+âœ“  No route in this domain is reachable without a valid token
+âœ“  Email cannot be changed through the profile-update endpoint
+âœ“  Validation rules for phone and pincode are enforced
+âœ“  Your work is fully merged into in1's integrated Flask app with no conflicts
+âœ“  /account/profile and /account/addresses pages work end-to-end against your backend endpoints
+âœ“  AddressCard and AddressForm are built and wired to your address CRUD service
+âœ“  Setting an address as default updates the UI optimistically and is confirmed by the server response
+Repository Structure Ownership
+backend/
+
+app/
+â”œâ”€â”€ models/
+â”‚   â””â”€â”€ user.py              â€” you own the addresses[] sub-document + to_public_dict()
+â”‚   â””â”€â”€ address.py           â€” fully yours
+â”‚
+â”œâ”€â”€ services/
+â”‚   â””â”€â”€ user_service.py      â€” fully yours
+â”‚   â””â”€â”€ address_service.py   â€” fully yours
+â”‚
+â”œâ”€â”€ routes/
+â”‚   â””â”€â”€ user_routes.py       â€” fully yours (profile + address handlers)
+â”‚
+â”œâ”€â”€ utils/
+â”‚   â””â”€â”€ auth_middleware.py   â€” consumed, not owned (built by in1)
+â”‚
+â””â”€â”€ __init__.py              â€” consumed, not owned (built by in1)
+
+models/user.py is a shared file. in1 owns the top-level auth fields (email, password_hash, auth_provider). You own the addresses[] sub-array and any profile-display helper methods. Agree on section boundaries before either of you edits the file.
+
+frontend/ (Next.js)
+
+app/
+â””â”€â”€ (account)/                â€” rendered inside in1â€™s AuthGuard layout
+    â”œâ”€â”€ profile/page.tsx      â€” fully yours
+    â””â”€â”€ addresses/page.tsx    â€” fully yours
+
+components/
+â”œâ”€â”€ account/AddressCard.tsx   â€” fully yours
+â””â”€â”€ account/AddressForm.tsx   â€” fully yours
+
+You own profile/page.tsx, addresses/page.tsx, AddressCard.tsx, and AddressForm.tsx entirely. These pages render inside in1â€™s (account)/ layout â€” consumed, not owned.
+System Architecture Responsibilities
+Profile & Address Domain Architecture
+Modules within your domain:
+Profile Read & Update (name, phone)
+Address Create, Update, Delete
+Default Address Management
+Public Profile Exposure (for cross-module consumption)
+Technical Architecture
+Define, within the boundaries in1 has set for the module:
+The addresses[] sub-document schema
+Service-layer separation between user_service.py and address_service.py
+How get_public_profile() is structured so it can never leak password_hash or any sensitive field
+Data Integrity Architecture (Critical Compliance)
+Implement:
+Server-side enforcement that setting is_default: true on one address unsets it on every other address belonging to that user.
+A rule preventing a user from being left with zero addresses once they have added at least one.
+Enforce: address mutation requests are always scoped to request.user._id â€” an address ID alone is never sufficient authorization to modify or delete it.
+Standards
+Follow the standards in1 has approved for the module:
+Naming conventions for files, functions, and routes
+The standard API response contract
+Validation and error-handling conventions
+Service Layer Responsibilities
+user_service.py
+get_profile(user_id) â€” full profile including addresses, for the owning user only
+update_profile(user_id, data) â€” accepts name and phone only; reject any email field rather than silently ignoring it
+get_public_profile(user_id) â€” the sole sanctioned lookup for other modules; returns only safe fields, never password_hash
+address_service.py
+add_address(user_id, data)
+update_address(user_id, address_id, data) â€” partial updates allowed
+delete_address(user_id, address_id) â€” see the deletion rule below
+set_default(user_id, address_id) â€” unsets is_default on all other addresses for that user
+Frontend Responsibilities
+Per the Module 1 frontend specification, you own everything a signed-in customer sees and edits about their own identity beyond the token itself.
+Pages & Components You Own
+/account/profile â€” profile view/edit page, calling GET/PUT /api/user/profile
+/account/addresses â€” address list page
+AddressCard â€” displays a single saved address
+AddressForm â€” modal or inline form for adding/editing an address
+Key Interactions
+Profile form: inline validation on name/phone before submit, using in3â€™s shared validators module
+Address form: inline validation on phone/pincode/label before submit, using in3â€™s shared validators module
+Setting one address as default visually unchecks any other address in the list immediately (optimistic UI), then is confirmed by the server response â€” if the server rejects the change, revert the optimistic update
+Address form fields mirror the backendâ€™s addresses[] schema exactly: label, line1, line2, city, state, pincode, is_default
+Design System Compliance
+AddressCard and AddressForm use the dark glassmorphism panel treatment consistent with in1â€™s AuthForm
+Primary actions (save address, set default) get the neon glow CTA treatment
+Validation errors use the warning tint, never a clashing red
+Cross-Module Integration
+in1 Integration â€” Auth & Tokens
+Required Contracts: @require_auth decorator, request.user._id attachment, base models/user.py document shape.
+Validate: your addresses[] schema sits cleanly on top of in1's base user document without field collisions.
+Frontend: /account/profile and /account/addresses must be nested inside in1â€™s AuthGuard-protected (account)/ layout â€” do not build a separate auth check on these pages.
+Module 8 Integration â€” Orders
+Required Contracts: get_public_profile(user_id) as the only sanctioned source of customer name/email/address for the order's customer_snapshot.
+Validate: the 'block deletion of the last default address linked to a pending order' rule â€” confirm the exact set of 'pending' order statuses directly with the Module 8 team before hard-coding it.
+Downstream Modules (6, 7, 9)
+Required: any module needing user display info must call get_public_profile(user_id) instead of writing its own lookup.
+Validate: no other module queries the users collection directly for display fields.
+API Governance Responsibilities
+Endpoints You Own
+Method
+Route
+Notes
+GET
+/api/user/profile
+Auth required. Returns name, email, phone, addresses[]
+PUT
+/api/user/profile
+Auth required. Body: name?, phone? â€” email change not allowed
+POST
+/api/user/addresses
+Auth required. Body: label, line1, line2, city, state, pincode, is_default
+PUT
+/api/user/addresses/:id
+Auth required. Same fields, partial allowed
+DELETE
+/api/user/addresses/:id
+Auth required. Subject to the last-default-address rule
+
+Response Standards
+Follow the platform-standard shape on every endpoint:
+{ "success": true, "message": "", "data": {} }
+{ "success": false, "message": "", "errors": {} }
+Data Model You Own
+Address sub-document, embedded inside the users collection:
+{
+  "_id": ObjectId,
+  "label": "Home | Work | Other",
+  "line1": "string",
+  "line2": "string",
+  "city": "string",
+  "state": "string",
+  "pincode": "string",
+  "is_default": true
+}
+Validation Rule Definitions
+Field
+Rule
+Name
+Required, non-empty on profile update
+Phone
+10-digit Indian mobile format (adjust if international customers expected)
+Pincode
+6-digit numeric
+Label
+One of: Home, Work, Other
+Security Responsibilities
+Access Control
+Every route in this domain sits behind @require_auth â€” no exceptions
+Every address operation is scoped to request.user._id; never trust a client-supplied user reference
+Data Exposure
+get_public_profile() never returns password_hash or any other sensitive field, verified by direct inspection
+Profile update silently rejects any attempt to change email through this endpoint
+Data Integrity Rules (Non-Negotiable)
+Rule
+Definition
+Single Default Address
+Setting is_default: true on one address must unset it on all others for that user â€” enforced in address_service.py, never assumed from client data.
+Minimum Address Count
+A user must always retain at least one address once they have added one.
+Deletion Guard
+Block deletion of the last remaining default address if it is linked to a pending order â€” confirm 'pending' status list with Module 8 before implementation.
+What You Depend On From Others
+in1: @require_auth decorator, request.user._id, base models/user.py document shape, standard error codes (401 / 403)
+What Others Depend On From You
+Frozen Interface
+Consumers
+user_service.get_public_profile(user_id)
+Module 8 (Orders), Module 9 (Reviews), any module displaying a customer's name or email
+Code Review Expectations
+Your work is reviewed by Dilip Velayutham (Team Lead) as part of the module's integration review. Be ready to demonstrate:
+Profile and address CRUD working end-to-end
+The single-default-address invariant, tested with a live example
+get_public_profile() output, confirmed free of sensitive fields
+Final Module Checklist
+Models & Services
+[ ]  addresses[] Sub-Document Schema
+[ ]  user_service.py Complete
+[ ]  address_service.py Complete
+Routes
+[ ]  Profile GET / PUT
+[ ]  Address POST / PUT / DELETE
+Data Integrity
+[ ]  Single Default Address Enforced
+[ ]  Minimum Address Count Enforced
+[ ]  Deletion Guard Confirmed With Module 8
+Integration
+[ ]  get_public_profile() Published & Adopted
+[ ]  Merged Into in1's Integrated App With No Conflicts
+Frontend
+[ ]  /account/profile Page Built
+[ ]  /account/addresses Page Built
+[ ]  AddressCard Component Built
+[ ]  AddressForm Component Built
+[ ]  Optimistic Default-Address UI Working
+Final Deliverables
+1. models/user.py â€” addresses[] schema and public-dict helper
+2. models/address.py
+3. services/user_service.py
+4. services/address_service.py
+5. routes/user_routes.py (profile + address handlers)
+6. Validation Rule Documentation
+7. Data Integrity Test Report (default-address invariant)
+8. get_public_profile() Interface Documentation
+9. Frontend: /account/profile and /account/addresses pages
+10. Frontend: AddressCard.tsx, AddressForm.tsx
+Acceptance Criteria
+The task is complete only when:
+Profile and address endpoints work end-to-end with correct status codes and response shapes
+Email cannot be changed via the profile-update endpoint
+The single-default-address rule is verified with a real test case
+get_public_profile() is confirmed free of sensitive fields and adopted by dependent modules
+The last-default-address deletion rule is confirmed with Module 8 and implemented
+All routes are confirmed unreachable without a valid token
+Profile and address pages work end-to-end against the live backend
+Setting a default address updates instantly in the UI and matches the serverâ€™s confirmed state
+All forms validate inline using in3â€™s shared validators, matching the backend rules exactly
+Final Note
+You own the part of the platform every order, delivery, and customer-facing screen quietly depends on: an accurate, well-guarded picture of who the customer is and where their order should go.
+If your implementation is stable:
+Checkout and delivery data stays accurate
+Other modules never need to write their own user lookups
+Customer data stays protected from accidental exposure
+
+Goal:
+Build a clean, correctly-validated profile and address layer that every other Galxy module can trust without re-checking.

@@ -1,5 +1,7 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request, jsonify
 from app.utils.auth_middleware import require_auth
+from app.services import user_service, address_service
+from app.models.address import ValidationError
 from app.models.user import User
 
 user_bp = Blueprint('user', __name__)
@@ -7,45 +9,122 @@ user_bp = Blueprint('user', __name__)
 @user_bp.route('/profile', methods=['GET'])
 @require_auth
 def get_profile():
-    # request.user is attached by the @require_auth decorator
-    user = request.user
+    """
+    GET /api/user/profile
+    Returns name, email, phone, and addresses list of the authenticated user.
+    """
+    profile = User.to_public_dict(request.user)
     return jsonify({
         "success": True,
-        "data": User.to_public_dict(user)
+        "message": "Profile retrieved successfully.",
+        "data": profile
     }), 200
 
 @user_bp.route('/profile', methods=['PUT'])
 @require_auth
 def update_profile():
-    # In2 (Naresh) will implement profile updates (name, phone). Email updates rejected.
-    return jsonify({
-        "success": True,
-        "message": "Profile updated",
-        "data": User.to_public_dict(request.user)
-    }), 200
+    """
+    PUT /api/user/profile
+    Updates profile fields (name, phone). Explicitly blocks email updates.
+    """
+    data = request.get_json() or {}
+    try:
+        updated_user = user_service.update_profile(request.user['_id'], data)
+        return jsonify({
+            "success": True,
+            "message": "Profile updated successfully.",
+            "data": User.to_public_dict(updated_user)
+        }), 200
+    except ValidationError as e:
+        return jsonify({
+            "success": False,
+            "message": "Validation failed.",
+            "errors": e.errors
+        }), 400
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Server error: {str(e)}"
+        }), 500
 
 @user_bp.route('/addresses', methods=['POST'])
 @require_auth
 def add_address():
-    # In2 (Naresh) will implement this.
-    return jsonify({
-        "success": True,
-        "message": "Address added",
-        "data": {}
-    }), 201
+    """
+    POST /api/user/addresses
+    Adds a new address to the authenticated user.
+    """
+    data = request.get_json() or {}
+    try:
+        new_address = address_service.add_address(request.user['_id'], data)
+        new_address['_id'] = str(new_address['_id'])
+        return jsonify({
+            "success": True,
+            "message": "Address added successfully.",
+            "data": new_address
+        }), 201
+    except ValidationError as e:
+        return jsonify({
+            "success": False,
+            "message": "Validation failed.",
+            "errors": e.errors
+        }), 400
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Server error: {str(e)}"
+        }), 500
 
-@user_bp.route('/addresses/<address_id>', methods=['PUT', 'DELETE'])
+@user_bp.route('/addresses/<address_id>', methods=['PUT'])
 @require_auth
-def manage_address(address_id):
-    # In2 (Naresh) will implement this.
-    if request.method == 'DELETE':
+def update_address(address_id):
+    """
+    PUT /api/user/addresses/:id
+    Updates an existing address of the authenticated user. Partial updates allowed.
+    """
+    data = request.get_json() or {}
+    try:
+        updated_addr = address_service.update_address(request.user['_id'], address_id, data)
+        updated_addr['_id'] = str(updated_addr['_id'])
         return jsonify({
             "success": True,
-            "message": "Address deleted"
+            "message": "Address updated successfully.",
+            "data": updated_addr
         }), 200
-    else:
+    except ValidationError as e:
+        return jsonify({
+            "success": False,
+            "message": "Validation failed.",
+            "errors": e.errors
+        }), 400
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Server error: {str(e)}"
+        }), 500
+
+@user_bp.route('/addresses/<address_id>', methods=['DELETE'])
+@require_auth
+def delete_address(address_id):
+    """
+    DELETE /api/user/addresses/:id
+    Removes an address of the authenticated user. Subject to invariants constraint.
+    """
+    try:
+        address_service.delete_address(request.user['_id'], address_id)
         return jsonify({
             "success": True,
-            "message": "Address updated",
+            "message": "Address deleted successfully.",
             "data": {}
         }), 200
+    except ValidationError as e:
+        return jsonify({
+            "success": False,
+            "message": "Validation failed.",
+            "errors": e.errors
+        }), 400
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Server error: {str(e)}"
+        }), 500

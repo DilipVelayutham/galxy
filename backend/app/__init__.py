@@ -6,7 +6,11 @@ from dotenv import load_dotenv
 # Load env variables on startup
 load_dotenv()
 
+# Database instance exposed at package level for in2/in3 runtime imports
+db = None
+
 def create_app(test_config=None):
+    global db
     app = Flask(__name__)
     
     # Load defaults
@@ -20,13 +24,12 @@ def create_app(test_config=None):
     
     # Initialize CORS
     allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
-    # Split origins if multiple are configured
     origins_list = [origin.strip() for origin in allowed_origins.split(",")]
     CORS(app, resources={r"/api/*": {"origins": origins_list}}, supports_credentials=True)
     
     # Initialize DB connection
     from app.db import init_db
-    init_db(app)
+    db = init_db(app)
     
     # Register blueprints
     from app.routes.auth_routes import auth_bp

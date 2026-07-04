@@ -1,5 +1,16 @@
-from app import create_app
 import os
+import sys
+
+# Ensure both workspace root and backend root are in python path
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+workspace_dir = os.path.dirname(backend_dir)
+
+if backend_dir not in sys.path:
+    sys.path.append(backend_dir)
+if workspace_dir not in sys.path:
+    sys.path.append(workspace_dir)
+
+from app import create_app
 
 app = create_app()
 

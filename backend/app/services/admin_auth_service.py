@@ -58,6 +58,13 @@ class AdminAuthService:
         return admin
 
     @staticmethod
+    def logout():
+        """
+        Handles admin logout. Currently stateless on the server side.
+        """
+        return True
+
+    @staticmethod
     def refresh_tokens(refresh_token_str):
         """
         Verifies the admin refresh token and issues a new access token and rotated refresh token.

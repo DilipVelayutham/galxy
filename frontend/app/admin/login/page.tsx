@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import axios from "axios";
+import { useAdminAuth } from "../../../context/AdminAuthContext";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminLoginPage() {
+  const { login } = useAdminAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -27,20 +28,11 @@ export default function AdminLoginPage() {
 
     setIsSubmitting(true);
     try {
-      const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api"}/admin/auth/login`,
-        { email, password },
-        { withCredentials: true }
-      );
-
-      if (res.data?.success) {
-        // Save admin access token in sessionStorage (isolated from customer)
-        sessionStorage.setItem("admin_token", res.data.data.access_token);
-        // Redirect to admin dashboard
-        window.location.href = "/admin/dashboard";
-      }
+      await login(email, password);
+      // Redirect to admin dashboard
+      window.location.href = "/admin/dashboard";
     } catch (err: any) {
-      setErrors({ auth: err.response?.data?.message || "Invalid admin credentials" });
+      setErrors({ auth: err.message || "Invalid admin credentials" });
     } finally {
       setIsSubmitting(false);
     }

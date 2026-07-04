@@ -73,3 +73,47 @@ This report details the execution and results of the Module 1 QA testing suite, 
   * All pages compiled without type-checking or bundling errors.
   * Router-group paths (`/account/addresses` and `/account/profile`) were verified to resolve correctly.
   * TypeScript type parameters matching the backend payloads were verified to compile cleanly.
+
+---
+
+## 4. Frontend Route & Component Verification Report
+
+As the Module 1 QA gatekeeper, we performed detailed manual testing across all integrated frontend components and paths (compiled successfully via Next.js 16.2.10):
+
+### 4.1 Signup & Login (Dilip - In1)
+* **Signup (`/signup`)**:
+  * *Input validation*: Checked inline errors for blank names, improperly formatted emails, non-Indian phone formats, and weak passwords. All validated correctly client-side using `validators.ts`.
+  * *Submit*: Creating an account hit the `/api/auth/signup` endpoint, successfully saved the user in MongoDB, issued JWT cookies, and redirected to home `/`.
+* **Customer Login (`/login`)**:
+  * *Login flow*: Verified password mask toggling, client-side validation, error handling on wrong passwords, and success redirection.
+  * *Token refresh*: Verified that token is stored in React memory context (avoiding sessionStorage/localStorage exposure) and silently refreshed via `/api/auth/refresh` on page reload.
+
+### 4.2 Profile & Address Book (Naresh - In2)
+* **Profile (`/account/profile`)**:
+  * *View/Update*: Verified profile loading from `/api/user/profile` and fields updating (name, phone) on submission.
+  * *Email Read-Only*: Confirmed the email address field is disabled and read-only.
+* **Addresses (`/account/addresses`)**:
+  * *List / Cards*: Verified addresses load into beautiful dashboard cards with default markers.
+  * *Address Form Modal*: Validated `AddressForm` props, pincode checks (must be 6 digits), required fields, and saving status changes.
+  * *Default Address Invariants*: Checked that adding a new default address correctly resets previous defaults, and deleting the default address promotes another to default.
+
+### 4.3 Password Recovery (Tharani - In3)
+* **Forgot Password (`/forgot-password`)**:
+  * *Enumeration protection*: Entered non-existent email; verified generic success alert is shown and response delay mimics hashing time.
+* **Reset Password (`/reset-password?token=...`)**:
+  * *Reset flow*: Verified changing password via mock token logs changes. Single-use token expiration checked.
+
+---
+
+## 5. Frontend Role Isolation Verification (Critical Compliance)
+
+Role isolation checks were fully verified on the client-side context and guards (`AuthGuard.tsx` and `AdminGuard.tsx`):
+
+| Initial Session State | Attempted Destination Path | Expected Behavior | Verification Status |
+| :--- | :--- | :--- | :--- |
+| Logged-in Customer | `/admin/dashboard` | Redirected to Home `/` by `AdminGuard` | **PASS** |
+| Logged-in Customer | `/admin/login` | Redirected to Home `/` by `AdminGuard` | **PASS** |
+| Logged-in Admin | `/account/profile` | Redirected to `/admin/dashboard` by `AuthGuard` | **PASS** |
+| Logged-in Admin | `/account/addresses` | Redirected to `/admin/dashboard` by `AuthGuard` | **PASS** |
+| Unauthenticated Guest | `/account/*` | Redirected to `/login` | **PASS** |
+| Unauthenticated Guest | `/admin/dashboard` | Redirected to `/admin/login` | **PASS** |

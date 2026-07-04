@@ -109,6 +109,49 @@ if (!result.isValid) {
 }
 ```
 
+### 2.4 Address Form Component (`AddressForm`)
+The `AddressForm` is a React component located in `components/account/AddressForm.tsx` used for adding new and editing existing delivery addresses.
+
+#### Props Contract:
+| Prop | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `address` | `Address` | No | Existing address object if editing. If omitted, the form runs in "Add" mode. |
+| `onSave` | `(data: Omit<Address, '_id'> & { _id?: string }) => Promise<void>` | Yes | Async function triggered on successful form submission. |
+| `onClose` | `() => void` | Yes | Callback invoked when the user cancels or closes the form. |
+| `isSaving` | `boolean` | No | Controls saving loading state/disabled buttons (defaults to `false`). |
+
+#### Usage:
+```tsx
+import { AddressForm } from "@/components/account/AddressForm";
+import { Address } from "@/components/account/AddressCard";
+
+const handleSave = async (addressData) => {
+  await api.post("/user/addresses", addressData);
+};
+
+<AddressForm 
+  address={editingAddress} 
+  onSave={handleSave} 
+  onClose={() => setIsOpen(false)} 
+  isSaving={isSaving}
+/>
+```
+
+### 2.5 Consolidated Frontend Route Map
+All frontend page routes registered in Module 1:
+
+| Route Path | Owner | Auth Requirement | Description |
+| :--- | :--- | :--- | :--- |
+| `/` | public | None | Landing/Shop home page |
+| `/login` | Dilip (In1) / Tharani (In3) | None | Customer authentication portal |
+| `/signup` | Dilip (In1) | None | Customer account registration |
+| `/forgot-password` | Tharani (In3) | None | Email-safe password recovery trigger |
+| `/reset-password` | Tharani (In3) | None | Final password change via token |
+| `/account/profile` | Naresh (In2) | Customer (`AuthGuard`) | View/update customer name & phone |
+| `/account/addresses` | Naresh (In2) | Customer (`AuthGuard`) | Address book management interface |
+| `/admin/login` | Arun (In4) | None | CMS Administrator login page |
+| `/admin/dashboard` | Arun (In4) | Admin (`AdminGuard`) | CMS management panel & telemetry |
+
 ---
 
 ## 3. Active Coordination Items
@@ -117,3 +160,7 @@ if (!result.isValid) {
    * Module 1 uses environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_EMAIL`, `SMTP_PASSWORD`) for sending password-reset emails. Ensure these credentials match the centralized notification server definitions to avoid conflicts.
 2. **Order Address Deletion (Module 8 - Orders)**:
    * In `address_service.py`, deleting the default address is blocked if there are pending orders in the `orders` collection (`status` not in `delivered`/`cancelled`). Ensure your Order schemas match `status` values for smooth integration.
+3. **Admin Silent Token Refresh (`/api/admin/auth/refresh`)**:
+   * The team added an un-planned refresh endpoint `/api/admin/auth/refresh` supporting HttpOnly `admin_refresh_token` session rotation. Scopes of tokens and cookies are strictly separated from customer endpoints. Approved by Dilip for production parity with customer auth.
+4. **Next.js Router Group Discrepancy (CMS Landing)**:
+   * The execution plan documented the path for CMS as `app/(admin)/login/page.tsx`. However, Next.js route groups resolve to pathless URLs, colliding with `app/(public)/login/page.tsx` on `/login`. Hence, CMS login was placed under `app/admin/login/page.tsx`, which correctly serves `/admin/login`.

@@ -74,6 +74,7 @@ def login():
 
 @admin_auth_bp.route('/logout', methods=['POST'])
 def logout():
+    AdminAuthService.logout()
     response = jsonify({
         "success": True,
         "message": "Logged out"
@@ -84,8 +85,10 @@ def logout():
 @admin_auth_bp.route('/me', methods=['GET'])
 @require_admin
 def me():
-    # request.admin is attached by the @require_admin decorator
-    admin = request.admin
+    # Retrieve fresh admin details using the service function
+    admin = AdminAuthService.get_current_admin(request.admin["_id"])
+    if not admin:
+        return jsonify({"success": False, "message": "Admin not found"}), 404
     return jsonify({
         "success": True,
         "data": {

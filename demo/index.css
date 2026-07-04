@@ -1076,9 +1076,6 @@ body {
   100% { top: 100%; }
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 
 @keyframes pulse-glow {
   0% { box-shadow: 0 0 6px rgba(255, 0, 127, 0.3); }

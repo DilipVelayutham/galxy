@@ -3,7 +3,7 @@
 **Prepared for**: Dilip Velayutham (Team Lead, Module 1)  
 **Scope**: Module 1, In3 — Password Hashing & Recovery Flow Security Verification
 
-This report documents the security compliance verification of the password recovery and field validator features. All security requirements have been verified via automated test cases in [test_in3.py](file:///c:/Users/jggna/OneDrive/Desktop/galaxy/galxy-module-1-auth/backend/tests/test_in3.py).
+This report documents the security compliance verification of the password recovery and field validator features. All security requirements have been verified via automated test cases in [backend/tests/test_in3.py](../backend/tests/test_in3.py).
 
 ---
 

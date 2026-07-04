@@ -139,7 +139,7 @@ def generate_preview(category_id, selected_attributes, user_id=None, session_id=
     start_time = time.time()
     try:
         image_bytes = generate_preview_image(prompt_compiled)
-        generation_time_ms = int((time.time() - start_time) * 1000)
+        generation_time_ms = max(int((time.time() - start_time) * 1000), 1)
     except Exception as e:
         error_msg = str(e)
         # Log failure in DB using AIGeneration model

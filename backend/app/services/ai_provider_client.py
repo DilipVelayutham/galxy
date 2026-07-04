@@ -15,7 +15,8 @@ def generate_preview_image(prompt):
     """
     if MOCK_AI or not GEMINI_API_KEY:
         print(f"[AI Client] Mock Mode Active. Simulating image generation for prompt: '{prompt}'")
-        time.sleep(1.5)  # Simulate generation delay
+        if not os.getenv("TESTING"):
+            time.sleep(1.5)  # Simulate generation delay
         return get_mock_image_bytes(prompt)
 
     try:

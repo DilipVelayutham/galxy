@@ -9,6 +9,7 @@ import mongomock
 
 # Set environment variables for testing before imports
 os.environ["MOCK_AI"] = "True"
+os.environ["TESTING"] = "True"
 os.environ["AI_FREE_GENERATIONS_PER_SESSION"] = "5"
 os.environ["AI_MAX_GENERATIONS_PER_USER_PER_DAY"] = "20"
 

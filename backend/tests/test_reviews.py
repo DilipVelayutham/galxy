@@ -298,3 +298,26 @@ def test_admin_moderation_flow_and_testimonial_promotion(client, db, monkeypatch
     assert testi_doc["image"] == "img1.jpg"
     assert testi_doc["display_order"] == 5
     assert testi_doc["is_active"] is True
+
+def test_submit_review_integration_invalid_return_format(client, db, monkeypatch):
+    import app.services.review_service as rs
+    
+    class MockOrderServiceBool:
+        def has_delivered_order_for_product(self, user_id, product_id):
+            return True
+            
+    monkeypatch.setattr(rs, "order_service", MockOrderServiceBool())
+
+    headers = get_auth_headers()
+    prod_id = str(ObjectId())
+    
+    response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
+        "rating": 5,
+        "comment": "Nice product"
+    })
+    
+    assert response.status_code == 500
+    data = json.loads(response.data)
+    assert data["success"] is False
+    assert "Invalid response format" in data["message"]
+

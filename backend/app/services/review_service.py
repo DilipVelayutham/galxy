@@ -72,46 +72,23 @@ class ReviewService:
                 "errors": {}
             }, 403
 
-        # Extract order_id and order_number from the return value res
-        order_id = None
-        order_number = None
+        # Extract strictly from the documented return structure (dictionary)
+        if not isinstance(res, dict):
+            return {
+                "success": False,
+                "message": "Order Service integration error: Invalid response format.",
+                "errors": {}
+            }, 500
 
-        if isinstance(res, dict):
-            order_id = res.get("order_id") or res.get("id") or str(res.get("_id"))
-            order_number = res.get("order_number") or res.get("number")
-        elif isinstance(res, (list, tuple)) and len(res) >= 2:
-            order_id = res[0]
-            order_number = res[1]
-        elif hasattr(res, "order_id") and hasattr(res, "order_number"):
-            order_id = getattr(res, "order_id")
-            order_number = getattr(res, "order_number")
-        
-        # If order details were not directly returned but eligible is True, fallback to querying db
-        if not order_id or not order_number:
-            db = get_db()
-            product_oid = ReviewService.to_bson_id(product_id)
-            user_oid = ReviewService.to_bson_id(user_id)
-            
-            order_doc = db["orders"].find_one({
-                "user_id": {"$in": [str(user_id), user_oid]},
-                "status": "delivered",
-                "$or": [
-                    {"items.product_id": {"$in": [str(product_id), product_oid]}},
-                    {"products.product_id": {"$in": [str(product_id), product_oid]}},
-                    {"items": {"$in": [str(product_id), product_oid]}},
-                    {"products": {"$in": [str(product_id), product_oid]}}
-                ]
-            })
-            if order_doc:
-                order_id = str(order_doc["_id"])
-                order_number = order_doc.get("order_number") or f"ON-{order_id[:8].upper()}"
+        order_id = res.get("order_id")
+        order_number = res.get("order_number")
 
-        # If order metadata is still not resolved, fallback to a deterministic hash of user and product
         if not order_id or not order_number:
-            import hashlib
-            h = hashlib.md5(f"{user_id}:{product_id}".encode()).hexdigest()
-            order_id = f"ord_{h[:12]}"
-            order_number = f"ON-{h[:6].upper()}"
+            return {
+                "success": False,
+                "message": "Order Service integration error: Missing purchase metadata in response.",
+                "errors": {}
+            }, 500
 
         # 2. Check for duplicate review for this (user_id, product_id, order_id)
         reviews_col = get_reviews_col()

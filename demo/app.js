@@ -12,11 +12,11 @@ const CATEGORY_SCHEMA = {
   ai_prompt_template: 'A realistic professional product photo of a custom {category_name} spelling "{custom_text}", in {color} color, {font} font style, {mounting} hanging, mounted on a dark background with soft ambient glow, studio lighting, high detail, no watermark, no text overlay'
 };
 
-// Mock generated preview images database corresponding to colors
+// Mock generated preview images database corresponding to colors relative to /demo
 const PREVIEW_ASSETS = {
-  blue: "assets/neon_blue.png",
-  pink: "assets/neon_pink.png",
-  gold: "assets/neon_gold.png"
+  blue: "../assets/neon_blue.png",
+  pink: "../assets/neon_pink.png",
+  gold: "../assets/neon_gold.png"
 };
 
 // Core application state
@@ -67,6 +67,7 @@ const elements = {
   previewImageWrapper: document.querySelector(".preview-image-wrapper"),
   staleBanner: document.getElementById("ai-stale-banner"),
   cacheBadge: document.getElementById("cache-badge"),
+  genIdDisplay: document.getElementById("gen-id-display"),
   errorTitle: document.getElementById("error-title"),
   errorMessage: document.getElementById("error-message"),
   
@@ -103,7 +104,6 @@ function escapeHTML(str) {
 
 function sanitizeCustomText(text) {
   if (!text) return '';
-  // 1. Strip common prompt injection attempts case-insensitively
   const injectionPatterns = [
     /ignore\s+(previous\s+)?instructions/gi,
     /system\s+prompt/gi,
@@ -117,10 +117,7 @@ function sanitizeCustomText(text) {
     clean = clean.replace(pattern, '');
   });
   
-  // 2. Strip excessive special characters to prevent prompt engineering / layout bugs
-  // Allow only letters, numbers, standard punctuation, and spaces suitable for a neon sign.
   clean = clean.replace(/[^a-zA-Z0-9\s.,!?'"-]/g, '');
-  
   return clean.trim();
 }
 
@@ -129,7 +126,6 @@ function logEvent(source, message, isError = false) {
   const timestamp = new Date().toLocaleTimeString();
   const color = isError ? "#ef4444" : "#10B981";
   
-  // XSS Defense: Escape message content
   const escapedMessage = escapeHTML(message);
   const logLine = `\n[${timestamp}] [${source}] ${escapedMessage}`;
   
@@ -281,7 +277,7 @@ function getCacheKey(attributes) {
 async function mockGeneratePreviewAPI(requestData, responseMode, latencyMs) {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
-      // 1. Mock 400 Invalid Attributes response mode (Validation check fails)
+      // 1. Mock 400 Invalid Attributes response mode
       if (responseMode === "400") {
         resolve({
           status: 400,
@@ -331,7 +327,6 @@ async function mockGeneratePreviewAPI(requestData, responseMode, latencyMs) {
       const defaultValue = textAttr ? textAttr.default_value : '';
       
       const hasCustomText = requestData.selected_attributes.custom_text && requestData.selected_attributes.custom_text.trim().length > 0;
-      // Dynamic default concept instead of hardcoded literal check
       const bypassCache = hasCustomText && requestData.selected_attributes.custom_text !== defaultValue;
       
       if (!bypassCache && appState.cache.has(cacheKey)) {
@@ -383,6 +378,7 @@ async function generatePreview() {
   elements.stateLoading.classList.remove("hidden");
   elements.previewImageWrapper.classList.remove("stale");
   elements.staleBanner.classList.add("hidden");
+  elements.genIdDisplay.classList.add("hidden");
   
   const currentAttributes = { ...appState.selectedAttributes };
   
@@ -390,22 +386,22 @@ async function generatePreview() {
   const originalText = currentAttributes.custom_text;
   currentAttributes.custom_text = sanitizeCustomText(originalText);
   if (originalText !== currentAttributes.custom_text) {
-    logEvent("SECURITY", `Custom text sanitized. Prompt injection keywords or forbidden symbols removed. Cleaned: "${currentAttributes.custom_text}"`);
+    logEvent("SECURITY", `Custom text sanitized. Cleaned: "${currentAttributes.custom_text}"`);
   }
 
   // --- STRICT SPEC ORDER OF OPERATIONS ---
   // Flow: 1. Validate -> 2. Rate-Limit Check -> 3. Cache Check
 
-  // 1. Validation check (Simulated via simulator dashboard response mode)
+  // 1. Validation check
   const apiMode = document.querySelector('input[name="sim-api-mode"]:checked').value;
   if (apiMode === "400") {
-    logEvent("VALIDATION", "Module 4 validate_attributes check: FAILED. Configuration contains invalid attributes.", true);
+    logEvent("VALIDATION", "Module 4 validate_attributes check: FAILED.", true);
     renderErrorState(400);
     return;
   }
   logEvent("VALIDATION", "Module 4 validate_attributes check: PASSED.");
 
-  // 2. Rate Limiting Check (Blocks requests before checking cache)
+  // 2. Rate Limiting Check
   if (appState.isLoggedIn) {
     if (appState.userQuotaRemaining <= 0) {
       logEvent("RATE-LIMIT", "Quota exceeded: user daily limit reached (Daily limit reached, try again tomorrow)", true);
@@ -420,7 +416,7 @@ async function generatePreview() {
     }
   }
 
-  // 3. Cache Check (Cache hit doesn't consume quota or fetch API)
+  // 3. Cache Check
   const cacheKey = getCacheKey(currentAttributes);
   const textAttr = CATEGORY_SCHEMA.attributes.find(a => a.key === 'custom_text');
   const defaultValue = textAttr ? textAttr.default_value : '';
@@ -433,16 +429,20 @@ async function generatePreview() {
     cachedUrl = appState.cache.get(cacheKey);
     logEvent("CACHE", "Local cache hit. Serving cached preview instantly (Zero quota consumed).");
     
-    // Serve from cache immediately
     appState.lastGeneratedAttributes = { ...currentAttributes };
     appState.currentPreviewUrl = cachedUrl;
     appState.currentGenerationId = 'cache_' + Math.random().toString(36).substring(2, 10);
     
     elements.previewImage.src = cachedUrl;
     elements.cacheBadge.classList.remove("hidden");
+    
+    // Surface generation ID in the UI for downstream confirmation
+    elements.genIdDisplay.innerText = "Gen ID: " + appState.currentGenerationId;
+    elements.genIdDisplay.classList.remove("hidden");
+    
     elements.stateLoading.classList.add("hidden");
     elements.stateSuccess.classList.remove("hidden");
-    logEvent("UI", `Successfully rendered cached preview! (served from cache: true)`);
+    logEvent("UI", `Successfully rendered cached preview! (Gen ID: ${appState.currentGenerationId})`);
     return;
   }
 
@@ -464,14 +464,13 @@ async function generatePreview() {
     if (response.status === 200) {
       const resData = response.data.data;
       
-      // Save last generated config
       appState.lastGeneratedAttributes = { ...currentAttributes };
       appState.currentPreviewUrl = resData.output_image_url;
       appState.currentGenerationId = resData.generation_id;
       
       logEvent("API", `200 OK. Response: ${JSON.stringify(response.data, null, 2)}`);
       
-      // Decrement Quota since it was a fresh render (not cache hit)
+      // Decrement Quota
       if (!resData.from_cache) {
         if (appState.isLoggedIn) {
           appState.userQuotaRemaining--;
@@ -490,12 +489,15 @@ async function generatePreview() {
         elements.cacheBadge.classList.add("hidden");
       }
       
+      // Surface generation ID in the UI for downstream confirmation
+      elements.genIdDisplay.innerText = "Gen ID: " + resData.generation_id;
+      elements.genIdDisplay.classList.remove("hidden");
+      
       elements.stateLoading.classList.add("hidden");
       elements.stateSuccess.classList.remove("hidden");
       logEvent("UI", `Successfully rendered preview! Generation ID: ${resData.generation_id}`);
       
     } else {
-      // API error (429, 400, 502, 504)
       logEvent("API", `${response.status} Error. Response: ${JSON.stringify(response.data, null, 2)}`, true);
       renderErrorState(response.status, response.data.data?.limit_scope || null);
     }
@@ -511,6 +513,7 @@ function renderErrorState(statusCode, limitScope) {
   elements.stateSuccess.classList.add("hidden");
   elements.stateInitial.classList.add("hidden");
   elements.stateError.classList.remove("hidden");
+  elements.genIdDisplay.classList.add("hidden");
   
   if (statusCode === 429) {
     elements.errorTitle.innerText = "Daily Limit Reached";
@@ -529,7 +532,6 @@ function renderErrorState(statusCode, limitScope) {
     elements.errorTitle.innerText = "Preview Timeout";
     elements.errorMessage.innerText = "The AI preview generator is taking longer than usual. Please try again.";
   } else {
-    // 502 or generic errors
     elements.errorTitle.innerText = "Preview Unavailable";
     elements.errorMessage.innerText = "An error occurred while generating the preview. Our team has been notified.";
   }
@@ -546,8 +548,6 @@ elements.simAuthToggle.addEventListener("change", (e) => {
   elements.simCurrentRole.innerText = appState.isLoggedIn ? "AUTHENTICATED USER" : "GUEST";
   logEvent("AUTH", `Auth state updated. User role is now: ${elements.simCurrentRole.innerText}`);
   updateQuotaDisplay();
-  
-  // Recheck stale banner
   checkStaleState();
 });
 
@@ -555,7 +555,7 @@ elements.btnResetQuota.addEventListener("click", () => {
   appState.guestQuotaRemaining = 5;
   appState.userQuotaRemaining = 20;
   updateQuotaDisplay();
-  logEvent("SYSTEM", "Simulated usage quotas reset to defaults (Guest: 5, Logged-in: 20).");
+  logEvent("SYSTEM", "Simulated usage quotas reset to defaults.");
 });
 
 elements.simLatency.addEventListener("input", (e) => {

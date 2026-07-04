@@ -344,6 +344,16 @@
   border-radius: 4px;
 }
 
+.ai-preview-panel-container .gen-id-badge {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #9ca3af;
+  font-size: 0.75rem;
+  font-family: monospace;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+}
+
 .ai-preview-panel-container .btn-regenerate-main {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.08);

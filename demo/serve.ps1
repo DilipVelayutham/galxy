@@ -6,6 +6,9 @@ try {
     Write-Host "Server successfully started on http://localhost:$port/"
     $currentDir = $PSScriptRoot
     if (!$currentDir) { $currentDir = Get-Location }
+    
+    # Identify the parent directory to locate root folder assets
+    $parentDir = Split-Path -Parent $currentDir
 
     while ($listener.IsListening) {
         $context = $listener.GetContext()
@@ -17,7 +20,13 @@ try {
         
         # Clean path to avoid traversal issues
         $cleanPath = $urlPath.Replace("/", "\").TrimStart("\")
-        $filePath = Join-Path $currentDir $cleanPath
+        
+        # Routing: if requesting assets, look into parent assets, else look locally
+        if ($urlPath.StartsWith("/assets/")) {
+            $filePath = Join-Path $parentDir $cleanPath
+        } else {
+            $filePath = Join-Path $currentDir $cleanPath
+        }
         
         if (Test-Path $filePath -PathType Leaf) {
             $bytes = [System.IO.File]::ReadAllBytes($filePath)

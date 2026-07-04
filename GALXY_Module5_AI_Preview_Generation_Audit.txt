@@ -1,0 +1,78 @@
+GALXY CUSTOM LIGHTING & CRAFT STUDIO
+Comprehensive Engineering Audit & Testing Readiness BlueprintModule 5: AI Preview Generation Engine
+Document Type: | Engineering Code Review and Quality Assurance Report
+Document Type:
+Engineering Code Review and Quality Assurance Report
+Target Framework: | Flask / MongoDB / Cloudinary / Gemini API Ecosystem
+Target Framework:
+Flask / MongoDB / Cloudinary / Gemini API Ecosystem
+Current Implementation Build: | Revision 2 (Post-Admin and Test-Compliance Checkpoints)
+Current Implementation Build:
+Revision 2 (Post-Admin and Test-Compliance Checkpoints)
+Overall Compliance Rating: | 94% Complete (Ready for Runtime Execution Verification)
+Overall Compliance Rating:
+94% Complete (Ready for Runtime Execution Verification)
+Review Date / Author: | July 2026 / Lead Technology Integrator & Antigravity IDE Workspace
+Review Date / Author:
+July 2026 / Lead Technology Integrator & Antigravity IDE Workspace
+
+1. Executive Summary & Re-Evaluation Context
+Following initial feedback pointing out major structural omissions, the project source workspace has been updated. Crucially, the missing administrative routing infrastructure has been integrated, and a programmatic test-compliance framework has been established. This code compliance report serves as a formal analysis of the updated implementation, assessing its readiness for deployment and testing within the Antigravity IDE platform.
+The core workflows—covering custom prompt building, multi-tier rate limiting, caching behavior, and Cloudinary storage isolation—are now fully instantiated. The codebase demonstrates strong adherence to clean design patterns, but requires strict runtime test validation to ensure complex multi-user interaction boundaries function seamlessly.
+2. Quantitative Scorecard & Implementation Readiness Metrics
+The project build score has increased from an initial 82% to a highly robust 94%. This score reflects complete physical file availability and structural alignment with the technical specification layout.
+Evaluation Layer | Allocated Score | Granular Engineering Status Note
+Evaluation Layer
+Allocated Score
+Granular Engineering Status Note
+Structural Integrity | 25 / 25 | All designated folders, configuration scripts, model schemas, and routes are populated according to architecture requirements.
+Structural Integrity
+25 / 25
+All designated folders, configuration scripts, model schemas, and routes are populated according to architecture requirements.
+Testing Infrastructure | 20 / 20 | Test coverage includes service units and a dedicated programmatic compliance assertion suite.
+Testing Infrastructure
+20 / 20
+Test coverage includes service units and a dedicated programmatic compliance assertion suite.
+Feature Completeness | 28 / 30 | Administrative endpoints are integrated; final sign-off is contingent on verifying run-time execution parameters.
+Feature Completeness
+28 / 30
+Administrative endpoints are integrated; final sign-off is contingent on verifying run-time execution parameters.
+Edge-Case Safety | 21 / 25 | Programmatic rules are established; verification must ensure that text inputs bypass shared cache pools correctly.
+Edge-Case Safety
+21 / 25
+Programmatic rules are established; verification must ensure that text inputs bypass shared cache pools correctly.
+3. Granular Code-Level Architectural Review
+3.1 Routing Infrastructures (Public & Administrative Segregation)
+• File Verification - admin_ai_routes.py: The administrative path layer is now fully established. It encapsulates the GET /api/admin/ai/generations route, allowing historical aggregation and filtering by category, execution timestamp, or outcome status without polluting public-facing customer endpoint definitions.• Single-Source-of-Truth Enforcement: Inspection must confirm that the category write endpoint (PUT /api/admin/categories/:id/ai-prompt-template) remains exclusively owned by Module 2. Our module must restrict itself to a read-only role, averting data synchronization anomalies.
+3.2 app/services/prompt_builder_service.py (Natural Language Synthesis)
+1. Attribute Label Processing: Confirm that variable parsing logic extracts the clear, natural-language label (e.g., 'Cursive', 'Bold') instead of internal snake_case database keys ('cursive_v1', 'bold_v2') so prompts sent to the Gemini API read naturally.2. Optional Variable Fallbacks: When an optional configuration property is omitted by the user, the builder must replace the target curly-brace placeholder with an empty string ('') and automatically sanitize stray multi-spaces or broken punctuation.3. Prompt Injection Defense: Verify that user text inputs (custom_text) undergo robust filtering to block prompt injection phrases ('ignore previous instructions', 'override safety parameters') before rendering.
+3.3 app/services/ai_cache_service.py (Global Cost Controls)
+CRITICAL EDGE-CASE WARNING | Critical Security Requirement: Cache instances are stored globally across the platform to maximize efficiency for default selections. As an absolute rule, the cache engine must completely bypass lookup and storage operations if a configuration payload contains a 'custom_text' field. Failing to bypass the cache on user text will cause User B to see a cached asset containing User A's custom typed names or private identifiers.
+CRITICAL EDGE-CASE WARNINGCritical Security Requirement: Cache instances are stored globally across the platform to maximize efficiency for default selections. As an absolute rule, the cache engine must completely bypass lookup and storage operations if a configuration payload contains a 'custom_text' field. Failing to bypass the cache on user text will cause User B to see a cached asset containing User A's custom typed names or private identifiers.
+
+• Cache Key Sorting: The calculation of the lookup signature hash must sort the keys of the selected_attributes payload alphabetically prior to serialization. If this sorting is omitted, sending identical attributes in a different order will trigger an unnecessary cache miss.
+3.4 app/services/ai_rate_limit_service.py (Quota & Response Structuring)
+• Cache Quota Protection: Verify that a successful cache match short-circuits the workflow and skips quota deduction steps. Only live downstream AI provider calls should decrease a guest session or logged-in user's allocation pool.• API Payload Contract Stability: Under guest session limit states, the service must produce an HTTP 429 response matching the front-end specification: {"success": false, "message": "...", "data": { "limit_reached": true } }. The front-end design system relies on the limit_reached flag to trigger the contextual signup prompt.
+3.5 app/utils/cloudinary_helper.py (Asset Isolation)
+• Directory Segregation: The media helper must pass an explicit folder destination parameter (e.g., 'galxy/ai-previews/') during asset uploads. AI-rendered images must remain separate from standard catalog product photos to ensure administrative cleanup jobs can safely run without impacting permanent business assets.
+4. Runtime Testing & Verification Phase Blueprint
+To validate the remaining 6% of runtime compliance within the Antigravity IDE workspace, the upcoming testing phase should execute the following functional testing scenarios:
+Target Testing Scenario | Execution & Mocking Steps | Expected Compliance Outcome
+Target Testing Scenario
+Execution & Mocking Steps
+Expected Compliance Outcome
+Caching Leak Isolation Test | Submit two consecutive preview requests with matching base configurations, but use completely unique values in the custom_text field (e.g., 'Naveen' followed by 'Kumar'). | The second request must bypass the cache and return a brand-new asset. The logs must register zero cross-contamination of text parameters.
+Caching Leak Isolation Test
+Submit two consecutive preview requests with matching base configurations, but use completely unique values in the custom_text field (e.g., 'Naveen' followed by 'Kumar').
+The second request must bypass the cache and return a brand-new asset. The logs must register zero cross-contamination of text parameters.
+Deterministic Key Sorting Test | Submit an input payload with specific selected attributes. Follow it with a second payload containing the exact same attributes, but with inverted key ordering. | The second invocation must register an immediate cache match, returning from_cache: true with a generation time of 0ms.
+Deterministic Key Sorting Test
+Submit an input payload with specific selected attributes. Follow it with a second payload containing the exact same attributes, but with inverted key ordering.
+The second invocation must register an immediate cache match, returning from_cache: true with a generation time of 0ms.
+Error Object Schema Validation | Simulate a guest session sending requests beyond the configured AI_FREE_GENERATIONS_PER_SESSION threshold. | The application must yield a clean HTTP 429 response body containing the data block with limit_reached: true.
+Error Object Schema Validation
+Simulate a guest session sending requests beyond the configured AI_FREE_GENERATIONS_PER_SESSION threshold.
+The application must yield a clean HTTP 429 response body containing the data block with limit_reached: true.
+5. Handoff Contracts & Downstream Module Alignment
+To ensure system stability, ensure the output parameters align with the frozen cross-team handoff contracts:
+1. Cart Integration (Module 6): The POST /api/ai/generate-preview success response must consistently include the output_image_url and standard disclaimer. Module 6 caches this URL directly into cart_item.ai_preview_image without executing redundant downstream API calls.2. Order Stability (Module 8): The generated Cloudinary link must represent a permanent asset path. Module 8 (Orders) clones this reference string directly onto checkout line records (items[].ai_preview_image), requiring absolute URL stability over long lifecycles.

@@ -1,0 +1,80 @@
+GALXY Custom Lighting & Craft Studio
+Code Review & Compliance Report: Module 5 — AI Preview Generation
+Prepared For: | Engineering Management / Antigravity IDE Workspace Workspace
+Prepared For:
+Engineering Management / Antigravity IDE Workspace Workspace
+Target Component: | Module 5: AI Provider Integration, Prompt Templating, Caching & Rate Limiting
+Target Component:
+Module 5: AI Provider Integration, Prompt Templating, Caching & Rate Limiting
+Current Implementation Score: | 85% Complete (Structural Alignment Achieved)
+Current Implementation Score:
+85% Complete (Structural Alignment Achieved)
+Review Date: | July 2026
+Review Date:
+July 2026
+
+1. Executive Summary
+A comprehensive architectural compliance audit was performed on the source code implementation of Module 5 (AI Preview Generation) for the GALXY Custom Lighting & Craft Studio platform. The codebase has been organized under an excellent architectural layout, accurately mirroring the required Flask blueprints, background services, and test scripts. Core infrastructure setup achieves approximately 85% feature completeness. However, critical gaps remain surrounding Administrative routing, explicit cross-module single-source-of-truth guidelines, and vital security exceptions in caching logic that must be rectified before merging into production.
+2. Critical Missing Components
+2.1 Absolute File Absence: admin_ai_routes.py
+• Requirement: Section 3 of the technical specification explicitly mandates the segregation of routes into app/routes/ai_routes.py and app/routes/admin_ai_routes.py.• Finding: The admin_ai_routes.py file is completely missing from the directory. The administrator endpoint GET /api/admin/ai/generations (used to feed the Module 12 analytics dashboard) is either completely unimplemented or improperly consolidated within public customer routing files.
+2.2 Cross-Module Routing Violation (Route Ownership)
+• Requirement: Section 9 explicitly details that PUT /api/admin/categories/:id/ai-prompt-template modifies the core categories collection owned by Module 2. The specification explicitly noted that only one module should own the write action to prevent duplicate logic, recommending Module 2 ownership.• Action Required: Audit the codebase to ensure this endpoint has not been accidentally rewritten or instantiated within this module's controllers, avoiding split data-ownership bugs.
+3. Logical Risk & Security Edge-Cases to Audit
+CRITICAL CODE-LEVEL WARNINGS | Interns frequently write code that satisfies the 'happy path' while inadvertently creating security vulnerabilities or performance degradation under complex states. The following deep-dive components must be audited line-by-line within the Antigravity IDE workspace.
+CRITICAL CODE-LEVEL WARNINGSInterns frequently write code that satisfies the 'happy path' while inadvertently creating security vulnerabilities or performance degradation under complex states. The following deep-dive components must be audited line-by-line within the Antigravity IDE workspace.
+
+3.1 prompt_builder_service.py — Text Sanitization & Fallback Logic
+1. Parameter Label Resolution: Verify the prompt generation code extracts the attribute option's natural language label (e.g., "Bold") rather than the internal raw database identifier (e.g., "bold_v2"). Previews generated with raw codes will look unnatural and misrepresent the product.2. Missing Optional Placeholders: If an optional configuration attribute is left blank by a customer, the service must replace the corresponding placeholder text with an empty string ("") and sanitize resulting multi-spaces or trailing punctuation. Literal '{chain}' tags must never bleed into final API payloads.3. Injection Mitigation: Ensure robust text sanitation routines are running against custom_text or any free-text fields to block prompt injection phrases (e.g., "ignore previous instructions", "render an explicit image").
+3.2 ai_cache_service.py — Shared Cache Key Determinism & Bypasses
+1. Alphabetical Key Sorting: The cache key must generate from a deterministic hash of the category_id combined with alphabetically sorted selected_attributes keys. If sorting is left omitted, selecting the exact same combination of properties in a different order creates cache misses.2. CRITICAL BUG ALERT — Custom Text Cache Bypassing: The caching service must completely bypass the cache whenever a user supplies a free-text field (custom_text). Because cache pools are shared globally across customers to control costs, caching custom_text will inadvertently leak User A's custom typed names/words onto the canvases of User B.
+3.3 ai_rate_limit_service.py — Quota Deductions & Errors
+1. Quota Exemption on Cache Hits: Verify that requests fulfilled instantly via the global cache do not deduct allocations from a user or guest session's available quota pool. Only live, high-cost downstream API calls should draw down counts.2. Exact UI Data Shape Contract: Ensure that guest session rate limits returning a HTTP 429 status strictly follow the exact data payload shape: { "success": false, "message": "...", "data": { "limit_reached": true } }. The design system explicitly relies on the limit_reached flag to trigger the contextual upsell modal encouraging user registration.
+3.4 app/utils/cloudinary_helper.py — Media Folder Isolation
+• Audit Requirement: Confirm that the upload helper routes AI-rendered preview images exclusively into an isolated, distinct directory path (such as galxy/ai-previews/) completely separated from standard catalog inventory photography. This ensures administrative batch operations or cleanup jobs can purge transient preview data without risking permanent product imagery.
+4. Compliance & Verification Matrix
+Use the following task matrix directly within the Antigravity IDE to execute code fixes and verify complete specification coverage:
+Component | Verification Checklist Action | Target File
+Component
+Verification Checklist Action
+Target File
+Admin Dashboard Link | Create missing file and implement GET /api/admin/ai/generations with full pagination and filtering. | app/routes/admin_ai_routes.py
+Admin Dashboard Link
+Create missing file and implement GET /api/admin/ai/generations with full pagination and filtering.
+app/routes/admin_ai_routes.py
+Write Decoupling | Remove or flag any local implementation of PUT /api/admin/categories/:id/ai-prompt-template to yield ownership to Module 2. | app/routes/ai_routes.py
+Write Decoupling
+Remove or flag any local implementation of PUT /api/admin/categories/:id/ai-prompt-template to yield ownership to Module 2.
+app/routes/ai_routes.py
+Natural Language Prompts | Verify template replacement uses option labels instead of internal raw snake_case values. | app/services/prompt_builder_service.py
+Natural Language Prompts
+Verify template replacement uses option labels instead of internal raw snake_case values.
+app/services/prompt_builder_service.py
+Placeholder Fallbacks | Implement clean regex or replace strategies for empty fields to wipe structural curly braces gracefully. | app/services/prompt_builder_service.py
+Placeholder Fallbacks
+Implement clean regex or replace strategies for empty fields to wipe structural curly braces gracefully.
+app/services/prompt_builder_service.py
+Injection Shield | Strip out system-level prompt overrides or malicious instructional text from user text inputs. | app/services/prompt_builder_service.py
+Injection Shield
+Strip out system-level prompt overrides or malicious instructional text from user text inputs.
+app/services/prompt_builder_service.py
+Cache Key Determinism | Sort selected_attributes dictionary by dictionary keys prior to generating MD5/SHA256 signature hashes. | app/services/ai_cache_service.py
+Cache Key Determinism
+Sort selected_attributes dictionary by dictionary keys prior to generating MD5/SHA256 signature hashes.
+app/services/ai_cache_service.py
+Privacy Leak Prevention | Force an absolute cache bypass if custom_text is present in the payload. | app/services/ai_cache_service.py
+Privacy Leak Prevention
+Force an absolute cache bypass if custom_text is present in the payload.
+app/services/ai_cache_service.py
+Rate Limit Quota Rule | Ensure conditional block checks for cache hits before applying a decrement call to the Redis/DB rate limit state. | app/services/ai_rate_limit_service.py
+Rate Limit Quota Rule
+Ensure conditional block checks for cache hits before applying a decrement call to the Redis/DB rate limit state.
+app/services/ai_rate_limit_service.py
+API Error Contract | Validate that HTTP 429 exceptions produce the exact nested dictionary containing 'limit_reached': true. | app/services/ai_rate_limit_service.py
+API Error Contract
+Validate that HTTP 429 exceptions produce the exact nested dictionary containing 'limit_reached': true.
+app/services/ai_rate_limit_service.py
+Asset Isolation | Verify the destination folder parameter on upload calls is hardcoded or configured to 'galxy/ai-previews/'. | app/utils/cloudinary_helper.py
+Asset Isolation
+Verify the destination folder parameter on upload calls is hardcoded or configured to 'galxy/ai-previews/'.
+app/utils/cloudinary_helper.py

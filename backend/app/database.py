@@ -6,9 +6,9 @@ client = pymongo.MongoClient(MONGO_URI)
 db = client[MONGO_DB_NAME]
 
 # Collections
-categories = db["m5_categories"]
-ai_generations = db["m5_generations"]
-ai_cache = db["m5_cache"]
+categories = db["categories"]
+ai_generations = db["ai_generations"]
+ai_cache = db["ai_cache"]
 
 def get_db():
     return db

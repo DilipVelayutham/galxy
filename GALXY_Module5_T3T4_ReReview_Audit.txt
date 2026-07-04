@@ -1,0 +1,127 @@
+
+GALXY
+Custom Lighting & Craft Studio
+Module 5 — Backend Member 2: Caching & Rate Limiting/API
+Re-Review: Fix Verification Audit (Tasks M5-T3 + M5-T4)
+Follow-up to the July 4, 2026 initial audit
+Branch reviewed: feat-m5-t3-rate-limiting (revision 2)
+Owner: Gokul B  ·  Files: ai_cache_service.py, ai_rate_limit_service.py, ai_routes.py (history), admin_ai_routes.py
+Review date: July 4, 2026
+Prepared by LTI Technology  |  Learn · Think · Innovate
+
+1. What This Report Is
+This is a re-review of the same branch (feat-m5-t3-rate-limiting) covered by the July 4, 2026 initial audit. Every changed file was diffed line-by-line against the previous submission, and the full test suite was actually executed in this environment (not just read) to confirm the fixes hold at runtime, not just on paper.
+Six files changed since the last review: app/configs/ai_config.py, app/services/ai_cache_service.py, app/services/ai_rate_limit_service.py, app/routes/ai_routes.py, app/routes/admin_ai_routes.py, and test_suite.py (plus requirements.txt to add mongomock). All six changes map directly onto findings from the previous audit.
+2. Headline Result
+✓ Merge blocker cleared | The hardcoded MongoDB Atlas and Cloudinary credentials have been removed from app/configs/ai_config.py and replaced with a hard failure at startup if the environment variables are missing. This was the single blocking issue from the previous review, and it is resolved. (Standard practice going forward: since these values were exposed in git history, they should still be rotated at the provider level — that's an ops action outside this diff, not a code fix.)
+✓ Merge blocker cleared
+The hardcoded MongoDB Atlas and Cloudinary credentials have been removed from app/configs/ai_config.py and replaced with a hard failure at startup if the environment variables are missing. This was the single blocking issue from the previous review, and it is resolved. (Standard practice going forward: since these values were exposed in git history, they should still be rotated at the provider level — that's an ops action outside this diff, not a code fix.)
+3. Overall Completion
+71% → 95%   estimated completion against the T3/T4 task scope
+Every Critical, High, and Medium finding from the previous audit has a corresponding, correct fix in this revision, and the fixes were verified in three ways: (1) direct code diff against the flagged lines, (2) static re-reading of the new logic for correctness, and (3) actually running the test suite — which now passes fully offline. This is a genuinely strong turnaround; the remaining gaps are polish, not risk.
+Category | Before | After | Status
+Category
+Before
+After
+Status
+Cache key generation (collision safety) | 80% | 97% | Fixed
+Cache key generation (collision safety)
+80%
+97%
+Fixed
+Cache bypass rules (custom_text) | 70% | 93% | Fixed
+Cache bypass rules (custom_text)
+70%
+93%
+Fixed
+Two-tier rate limiting (session/user) | 85% | 95% | Fixed
+Two-tier rate limiting (session/user)
+85%
+95%
+Fixed
+IP-based guest fallback contract | 70% | 95% | Fixed
+IP-based guest fallback contract
+70%
+95%
+Fixed
+History & admin routes / pagination | 92% | 96% | Improved
+History & admin routes / pagination
+92%
+96%
+Improved
+Auth gating (401/403/200) | 90% | 90% | Unchanged
+Auth gating (401/403/200)
+90%
+90%
+Unchanged
+Security / secrets hygiene | 20% | 95% | Fixed
+Security / secrets hygiene
+20%
+95%
+Fixed
+Test coverage & CI-safety | 70% | 95% | Fixed
+Test coverage & CI-safety
+70%
+95%
+Fixed
+
+4. Fix-by-Fix Verification
+Each row maps one previous finding to the specific code change that addresses it.
+# | Original Finding | What changed | Status
+#
+Original Finding
+What changed
+Status
+1 | Critical: hardcoded live MongoDB Atlas URI + Cloudinary key/secret used as fallback defaults in ai_config.py. | MONGO_URI and all three CLOUDINARY_* vars now read only from the environment; the module raises ValueError at import time if any is missing. No real credentials remain in source. | Resolved
+1
+Critical: hardcoded live MongoDB Atlas URI + Cloudinary key/secret used as fallback defaults in ai_config.py.
+MONGO_URI and all three CLOUDINARY_* vars now read only from the environment; the module raises ValueError at import time if any is missing. No real credentials remain in source.
+Resolved
+2 | High: cache-key hash concatenated key:value pairs with no separator, creating a real collision risk between different attribute sets. | generate_cache_key() now hashes json.dumps(cleaned_attributes, sort_keys=True) — an unambiguous, delimiter-safe serialization. Verified by inspection; the specific collision scenario from the original finding is no longer reachable. | Resolved
+2
+High: cache-key hash concatenated key:value pairs with no separator, creating a real collision risk between different attribute sets.
+generate_cache_key() now hashes json.dumps(cleaned_attributes, sort_keys=True) — an unambiguous, delimiter-safe serialization. Verified by inspection; the specific collision scenario from the original finding is no longer reachable.
+Resolved
+3 | High: is_cache_bypassed() only recognized free text via a key literally containing "text", so a differently-named free-text attribute (e.g. "engraving") would be wrongly cached and shared across customers. | is_cache_bypassed() now looks up the category's real attribute_schema and treats any attribute of type text_input as bypass-worthy, regardless of its key name, while keeping the old substring check as an extra safety net. This is the schema-driven fix recommended in the prior audit. | Resolved
+3
+High: is_cache_bypassed() only recognized free text via a key literally containing "text", so a differently-named free-text attribute (e.g. "engraving") would be wrongly cached and shared across customers.
+is_cache_bypassed() now looks up the category's real attribute_schema and treats any attribute of type text_input as bypass-worthy, regardless of its key name, while keeping the old substring check as an extra safety net. This is the schema-driven fix recommended in the prior audit.
+Resolved
+4 | Medium: check_rate_limit() only counted status "success" toward quota, letting failed attempts retry indefinitely without being throttled. | All three quota queries (user daily, guest session, guest IP) now match status $in ["success", "failed"], so failed provider calls consume quota exactly like successful ones. | Resolved
+4
+Medium: check_rate_limit() only counted status "success" toward quota, letting failed attempts retry indefinitely without being throttled.
+All three quota queries (user daily, guest session, guest IP) now match status $in ["success", "failed"], so failed provider calls consume quota exactly like successful ones.
+Resolved
+5 | Medium: a third limit_scope value, "ip", was returned for IP-based blocks, outside the frozen two-value (session/user) frontend contract. | IP-based blocks now report limit_scope: "session" (with a code comment explaining why), preserving IP-based enforcement internally while keeping the response contract exactly two-valued for the frontend. | Resolved
+5
+Medium: a third limit_scope value, "ip", was returned for IP-based blocks, outside the frozen two-value (session/user) frontend contract.
+IP-based blocks now report limit_scope: "session" (with a code comment explaining why), preserving IP-based enforcement internally while keeping the response contract exactly two-valued for the frontend.
+Resolved
+6 | Medium: test_suite.py depended on a live external MongoDB Atlas cluster and real Cloudinary calls, making it un-runnable without that specific network access. | The suite now patches pymongo.MongoClient to mongomock.MongoClient and stubs cloudinary.uploader.upload/destroy before the app is imported, plus supplies dummy env vars so ai_config.py's new required-var checks pass. Verified: all 8 tests now run and pass fully offline in ~26s. | Resolved
+6
+Medium: test_suite.py depended on a live external MongoDB Atlas cluster and real Cloudinary calls, making it un-runnable without that specific network access.
+The suite now patches pymongo.MongoClient to mongomock.MongoClient and stubs cloudinary.uploader.upload/destroy before the app is imported, plus supplies dummy env vars so ai_config.py's new required-var checks pass. Verified: all 8 tests now run and pass fully offline in ~26s.
+Resolved
+7 | Low: history and admin routes returned the full MongoDB document instead of a projected subset, exposing internal diagnostic fields. | Both routes now pass an explicit projection to .find(), limited to the fields the frontend contract actually needs (plus status/error_message/generation_time_ms for the admin analytics view, which is appropriate there). | Resolved
+7
+Low: history and admin routes returned the full MongoDB document instead of a projected subset, exposing internal diagnostic fields.
+Both routes now pass an explicit projection to .find(), limited to the fields the frontend contract actually needs (plus status/error_message/generation_time_ms for the admin analytics view, which is appropriate there).
+Resolved
+5. Test Suite — Actually Executed
+Ran test_suite.py directly in this review environment. Result: 8/8 tests pass in ~26 seconds, with no external network dependency — a direct fix of the previous audit's biggest process concern (tests depending on a live, credential-bearing Atlas cluster).
+test_01_successful_generation — pass
+test_02_validation_error — pass
+test_03_caching_and_bypass — pass
+test_04_rate_limiting — pass
+test_05_auth_and_history — pass
+test_06_admin_analytics_cursor — pass
+test_07_rate_limiting_by_ip — pass (now asserts limit_scope: "session", matching the contract fix)
+test_08_cloudinary_orphan_rollback — pass
+6. What's Still Worth Polishing
+Nothing here is a merge blocker. These are the kind of follow-ups worth a small future ticket rather than a re-review cycle:
+No dedicated regression test yet for the schema-driven bypass fix itself — e.g. a category whose free-text field is named "engraving" rather than "custom_text", to prove two different engraving values never share a cache entry. The code looks correct by inspection; a test would make that permanent.
+No dedicated regression test proving two attribute sets that would have collided under the old concatenation scheme now hash differently under json.dumps — again correct by inspection, worth locking in with a test given how easy this class of bug is to reintroduce.
+is_cache_bypassed() now performs a DB lookup of the category on every single cache check and every cache store call to read attribute_schema. Functionally fine, but on a hot path this is an extra round-trip that could be avoided by having the caller (ai_service.py, which already fetches the category) pass the category document in directly instead of re-querying it here.
+Not this intern's file, but noted for the team: app/services/ai_provider_client.py attempts a live network image download and gets an HTTP 403 before falling back to local bytes — even with MOCK_AI=True. This adds a few seconds of latency per test and a network dependency inside what's supposed to be a fully offline mock path; worth flagging to the T1/T2 owner since it's the reason the otherwise-instant test suite still takes ~26 seconds.
+7. Conclusion
+This revision directly and correctly addresses every issue raised in the previous review, including the one that actually mattered most — the leaked live database and Cloudinary credentials are gone, replaced with a fail-loud startup check. The two cache-correctness bugs (key collisions, narrow bypass heuristic) are fixed with the right kind of fix — a genuinely delimiter-safe hash and a schema-driven bypass check — rather than a superficial patch. Test infrastructure now runs fully offline and actually passes. Recommended: approve and merge. The four items in Section 6 are good candidates for a fast-follow ticket, not a blocker.

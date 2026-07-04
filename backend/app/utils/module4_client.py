@@ -21,7 +21,8 @@ from app.configs.ai_config import MODULE4_VALIDATE_URL
 logger = logging.getLogger(__name__)
 
 # Set M4_VALIDATION_MODE=local in .env to use the dev fallback.
-_MODE = os.getenv("M4_VALIDATION_MODE", "http").lower()
+_default_mode = "local" if (os.getenv("TESTING") == "True" or os.getenv("MOCK_AI") == "True") else "http"
+_MODE = os.getenv("M4_VALIDATION_MODE", _default_mode).lower()
 
 
 def validate_attributes(
@@ -98,15 +99,21 @@ def _local_validate(category: dict, selected_attributes: dict) -> dict:
     attributes: list[dict] = category.get("attributes", [])
     errors = []
     for attr in attributes:
+        key = attr.get("key", "")
+        val = selected_attributes.get(key)
         if attr.get("required", False):
-            key = attr.get("key", "")
-            if key not in selected_attributes or selected_attributes[key] in (None, ""):
+            if val in (None, ""):
                 errors.append(f"'{key}' is required.")
+                continue
+        if val is not None and "options" in attr:
+            allowed = [opt.get("value") for opt in attr.get("options", [])]
+            if val not in allowed:
+                errors.append(f"'{val}' is not a valid option for '{key}'.")
 
     if errors:
         return {
             "valid": False,
             "errors": errors,
-            "message": "Missing required attributes: " + ", ".join(errors),
+            "message": "Validation failed: " + ", ".join(errors),
         }
     return {"valid": True, "errors": [], "message": ""}

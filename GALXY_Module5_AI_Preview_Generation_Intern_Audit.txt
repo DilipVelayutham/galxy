@@ -1,0 +1,229 @@
+
+GALXY
+Custom Lighting & Craft Studio
+Module 5 — AI Preview Generation
+Intern Code Review & Completion Audit
+Branch reviewed: feat/m5-t1-core-prompt
+Reference spec: Galxy_Module5_AI_Preview_Generation.docx (July 2026)
+Review date: July 3, 2026
+Prepared by LTI Technology  |  Learn · Think · Innovate
+
+1. Overview
+This audit compares the submitted branch (feat/m5-t1-core-prompt) against the Module 5 — AI Preview Generation specification document. It covers the full backend: prompt templating, the Gemini provider adapter, caching, rate limiting, Cloudinary upload, the public and admin API contracts, and the automated test suite.
+The reviewed code was read file-by-file, cross-checked line-by-line against every numbered section of the spec (Sections 1–12), and the automated test suite was actually executed (not just read) to confirm the claimed behavior holds at runtime.
+2. Overall Completion
+84%   estimated overall completion against the spec
+This is a strong intern submission. The core orchestration logic, prompt templating, caching rules, and rate-limiting rules are all implemented faithfully and match the spec's stated rules closely — including several details (custom_text-aware cache bypass, generation_time_ms: 0 on cache hits, cache hits excluded from rate limits) that are easy to skip and were not. The score is held below 90% by one real production-risk bug in the Cloudinary fallback path, a security placeholder that's honestly flagged but still open, and test/DX rough edges — see Sections 4 and 5.
+Category | Weight | Score | Status
+Category
+Weight
+Score
+Status
+Core generation flow (ai_service.py) | 25% | 95% | Strong
+Core generation flow (ai_service.py)
+25%
+95%
+Strong
+Prompt building & sanitization | 15% | 95% | Strong
+Prompt building & sanitization
+15%
+95%
+Strong
+Caching strategy | 10% | 80% | Good, one design gap
+Caching strategy
+10%
+80%
+Good, one design gap
+Rate limiting | 10% | 90% | Strong
+Rate limiting
+10%
+90%
+Strong
+API contract & routes | 15% | 88% | Good, minor gaps
+API contract & routes
+15%
+88%
+Good, minor gaps
+Cloudinary integration | 10% | 70% | Needs fix
+Cloudinary integration
+10%
+70%
+Needs fix
+Auth / security posture | 5% | 70% | Acceptable stopgap
+Auth / security posture
+5%
+70%
+Acceptable stopgap
+Tests & DX | 10% | 78% | Passes, but slow/fragile
+Tests & DX
+10%
+78%
+Passes, but slow/fragile
+3. Spec Coverage Checklist
+Spec item | Status
+Spec item
+Status
+ai_generations collection schema (Section 2.1) | Done
+ai_generations collection schema (Section 2.1)
+Done
+Indexes: user_id, session_id, category_id, created_at (2.1) | Done
+Indexes: user_id, session_id, category_id, created_at (2.1)
+Done
+Folder structure matches Section 3 | Done
+Folder structure matches Section 3
+Done
+Env vars: AI_PROVIDER, GEMINI_API_KEY, AI_FREE_GENERATIONS_PER_SESSION, AI_MAX_GENERATIONS_PER_USER_PER_DAY, AI_GENERATION_TIMEOUT_SECONDS | Done
+Env vars: AI_PROVIDER, GEMINI_API_KEY, AI_FREE_GENERATIONS_PER_SESSION, AI_MAX_GENERATIONS_PER_USER_PER_DAY, AI_GENERATION_TIMEOUT_SECONDS
+Done
+Swappable provider adapter pattern (Section 4) | Done
+Swappable provider adapter pattern (Section 4)
+Done
+Prompt placeholder resolution incl. option label mapping (5) | Done
+Prompt placeholder resolution incl. option label mapping (5)
+Done
+affects_ai_preview:false exclusion (5) | Done
+affects_ai_preview:false exclusion (5)
+Done
+custom_text sanitization / injection stripping (5) | Done
+custom_text sanitization / injection stripping (5)
+Done
+Empty-placeholder cleanup (5) | Done
+Empty-placeholder cleanup (5)
+Done
+prompt_used always logged verbatim (5) | Done
+prompt_used always logged verbatim (5)
+Done
+Validate → 400 before any AI call (6, step 2) | Done
+Validate → 400 before any AI call (6, step 2)
+Done
+Rate-limit check before AI call (6, step 3) | Done
+Rate-limit check before AI call (6, step 3)
+Done
+Cache check before AI call (6, step 4) | Done
+Cache check before AI call (6, step 4)
+Done
+Timeout enforced on provider call (6, step 6) | Done
+Timeout enforced on provider call (6, step 6)
+Done
+Failure never leaks raw provider error text (6, step 8) | Done
+Failure never leaks raw provider error text (6, step 8)
+Done
+Cache key = category_id + sorted(selected_attributes) (7) | Done
+Cache key = category_id + sorted(selected_attributes) (7)
+Done
+Cache bypassed when custom_text present (7) | Done
+Cache bypassed when custom_text present (7)
+Done
+Cache not per-user (7) | Done
+Cache not per-user (7)
+Done
+Guest session + logged-in daily rate tiers (8) | Done
+Guest session + logged-in daily rate tiers (8)
+Done
+Cached hits excluded from rate limit counts (8) | Done
+Cached hits excluded from rate limit counts (8)
+Done
+POST /api/ai/generate-preview contract (9) | Done
+POST /api/ai/generate-preview contract (9)
+Done
+GET /api/ai/generations/:user_id, ownership-checked (9) | Done
+GET /api/ai/generations/:user_id, ownership-checked (9)
+Done
+GET /api/admin/ai/generations, admin-only, filterable (9) | Done
+GET /api/admin/ai/generations, admin-only, filterable (9)
+Done
+PUT /api/admin/categories/:id/ai-prompt-template | Out of scope (correct per spec 9)
+PUT /api/admin/categories/:id/ai-prompt-template
+Out of scope (correct per spec 9)
+Cloudinary upload to galxy/ai-previews/ folder (10) | Implemented — see Finding #1
+Cloudinary upload to galxy/ai-previews/ folder (10)
+Implemented — see Finding #1
+Shared cloudinary_helper.py reused, not duplicated (10) | Done
+Shared cloudinary_helper.py reused, not duplicated (10)
+Done
+Never validates/prices/persists-to-cart (11) | Correctly out of scope
+Never validates/prices/persists-to-cart (11)
+Correctly out of scope
+output_image_url guaranteed stable/permanent (12) | At risk — see Finding #1
+output_image_url guaranteed stable/permanent (12)
+At risk — see Finding #1
+
+4. Bugs, Gaps & Risks
+Ordered roughly by severity. "High" means it can silently corrupt data or break a downstream contract in production; "Medium" means it's a real gap that should be closed before go-live; "Low" means it's a cleanliness/maintainability note.
+# | Finding | File | Severity
+#
+Finding
+File
+Severity
+1 | upload_to_cloudinary() catches ALL exceptions during real upload and silently returns a fake "mock-error-fallback" Cloudinary URL instead of surfacing the failure. ai_service then logs status "success" and returns this non-existent URL to the frontend/cart/order — directly violating the Handoff Contract's promise (Section 12) that output_image_url is a permanent, stable, real Cloudinary URL. | app/utils/cloudinary_helper.py | High
+1
+upload_to_cloudinary() catches ALL exceptions during real upload and silently returns a fake "mock-error-fallback" Cloudinary URL instead of surfacing the failure. ai_service then logs status "success" and returns this non-existent URL to the frontend/cart/order — directly violating the Handoff Contract's promise (Section 12) that output_image_url is a permanent, stable, real Cloudinary URL.
+app/utils/cloudinary_helper.py
+High
+2 | create_app() calls AIGeneration.create_indexes() on every app boot, which opens a real MongoDB connection. With no local Mongo running (e.g. in CI or a fresh dev machine), each test file that calls create_app() in setUp blocks for ~20-30s before failing open. Across the 3 test files that instantiate the app (test_compliance, test_flask_success, test_user_routes), this adds minutes to a test run that should take seconds. Not a functional bug, but a real developer-experience/CI cost that should be mocked or made async/non-blocking. | app/__init__.py, tests/* | Medium
+2
+create_app() calls AIGeneration.create_indexes() on every app boot, which opens a real MongoDB connection. With no local Mongo running (e.g. in CI or a fresh dev machine), each test file that calls create_app() in setUp blocks for ~20-30s before failing open. Across the 3 test files that instantiate the app (test_compliance, test_flask_success, test_user_routes), this adds minutes to a test run that should take seconds. Not a functional bug, but a real developer-experience/CI cost that should be mocked or made async/non-blocking.
+app/__init__.py, tests/*
+Medium
+3 | store_cache() in ai_cache_service.py is a no-op stub. The module relies entirely on querying the ai_generations collection for prior matches instead — functionally fine, but the dangling stub is misleading dead code and should either be implemented meaningfully or removed to avoid confusing the next developer into thinking there's a separate cache write path. | app/services/ai_cache_service.py | Low
+3
+store_cache() in ai_cache_service.py is a no-op stub. The module relies entirely on querying the ai_generations collection for prior matches instead — functionally fine, but the dangling stub is misleading dead code and should either be implemented meaningfully or removed to avoid confusing the next developer into thinking there's a separate cache write path.
+app/services/ai_cache_service.py
+Low
+4 | Guest identity (X-User-Id header) and even user_id in the raw JSON body are accepted at face value with no verification (optional_login decorator). This is called out honestly in a code comment as a placeholder for Module 1's JWT auth, which is good practice — but it does mean generation history (GET /api/ai/generations/:user_id) is only as safe as the header, and a guest could currently impersonate any user_id merely by setting X-User-Id. Flagging so it isn't forgotten before production. | app/routes/ai_routes.py | Medium
+4
+Guest identity (X-User-Id header) and even user_id in the raw JSON body are accepted at face value with no verification (optional_login decorator). This is called out honestly in a code comment as a placeholder for Module 1's JWT auth, which is good practice — but it does mean generation history (GET /api/ai/generations/:user_id) is only as safe as the header, and a guest could currently impersonate any user_id merely by setting X-User-Id. Flagging so it isn't forgotten before production.
+app/routes/ai_routes.py
+Medium
+5 | PUT /api/admin/categories/:id/ai-prompt-template is not implemented anywhere in this module. This matches the spec's own recommendation (Module 2 should own the route) — correct scoping, not a bug — but it should be explicitly confirmed with the Module 2 lead so the endpoint isn't dropped entirely between the two modules. | (not implemented — by design) | Low
+5
+PUT /api/admin/categories/:id/ai-prompt-template is not implemented anywhere in this module. This matches the spec's own recommendation (Module 2 should own the route) — correct scoping, not a bug — but it should be explicitly confirmed with the Module 2 lead so the endpoint isn't dropped entirely between the two modules.
+(not implemented — by design)
+Low
+6 | Rate limit and cache lookups (ai_rate_limit_service.py, ai_cache_service.py) both "fail open" on any MongoDB exception — i.e., if the DB is briefly unavailable, generations are allowed through unmetered and uncached. This is a reasonable availability-over-cost-control tradeoff and is commented as intentional, but it does mean a DB outage removes the free-tier cost protections the whole module exists for. Worth a monitoring/alerting note for Asil. | app/services/ai_rate_limit_service.py, ai_cache_service.py | Low
+6
+Rate limit and cache lookups (ai_rate_limit_service.py, ai_cache_service.py) both "fail open" on any MongoDB exception — i.e., if the DB is briefly unavailable, generations are allowed through unmetered and uncached. This is a reasonable availability-over-cost-control tradeoff and is commented as intentional, but it does mean a DB outage removes the free-tier cost protections the whole module exists for. Worth a monitoring/alerting note for Asil.
+app/services/ai_rate_limit_service.py, ai_cache_service.py
+Low
+7 | The success response includes an extra generation_id field not mentioned in the frozen API contract (Section 12/9 of the spec only names output_image_url, from_cache, and disclaimer). Purely additive and non-breaking for existing consumers, but worth flagging since Section 12 explicitly says the response shape is "frozen" — any addition should ideally be confirmed with consuming teams (Module 6, Module 8) even if harmless. | app/services/ai_service.py | Low
+7
+The success response includes an extra generation_id field not mentioned in the frozen API contract (Section 12/9 of the spec only names output_image_url, from_cache, and disclaimer). Purely additive and non-breaking for existing consumers, but worth flagging since Section 12 explicitly says the response shape is "frozen" — any addition should ideally be confirmed with consuming teams (Module 6, Module 8) even if harmless.
+app/services/ai_service.py
+Low
+8 | Route handlers (ai_routes.py, admin_ai_routes.py) query the ai_generations collection directly instead of going through the AIGeneration model for reads. The model currently only exposes insert()/create_indexes(); read/query logic is duplicated across two route files instead of being centralized. Not a bug, but a maintainability gap as more read endpoints get added. | app/routes/*, app/models/ai_generation.py | Low
+8
+Route handlers (ai_routes.py, admin_ai_routes.py) query the ai_generations collection directly instead of going through the AIGeneration model for reads. The model currently only exposes insert()/create_indexes(); read/query logic is duplicated across two route files instead of being centralized. Not a bug, but a maintainability gap as more read endpoints get added.
+app/routes/*, app/models/ai_generation.py
+Low
+5. What's Missing vs. the Spec
+PUT /api/admin/categories/:id/ai-prompt-template — correctly out of scope per the spec's own recommendation that Module 2 owns it; needs a confirmation handshake with that team, not code here.
+No dedicated ai_cache_service.store_cache() implementation — currently relies implicitly on the ai_generations log doubling as the cache source of truth. Works, but should be documented as the intended design rather than left as a dead stub.
+No automated test covers the Cloudinary upload failure path (i.e., nothing asserts what happens when cloudinary.uploader.upload() throws) — which is exactly the path where the mock-fallback bug above lives. Adding that test would have caught it.
+No explicit test for AI_GENERATION_TIMEOUT_SECONDS actually cutting off a slow provider call (the requests timeout is wired up, but there's no test simulating a hang to confirm the 504 path end-to-end).
+README.md is a single line (just the module name) — no setup, env var, or local-run instructions for the next developer, despite the config/env surface being fairly large (7+ env vars).
+6. Strengths — What's Done Well
+Worth calling out explicitly, since a review that's all gaps undersells genuinely solid work here:
+Clean adapter pattern for the AI provider (AIProviderAdapter → GeminiProviderAdapter / MockProviderAdapter) exactly matches the spec's requirement to keep AI_PROVIDER genuinely swappable without a rewrite.
+Generation flow in ai_service.py follows the spec's 8-step sequence precisely: validate → rate-limit → cache → build prompt → call provider (with timeout) → upload → log → respond — including returning 400 before ever touching the provider on invalid input.
+Prompt builder correctly implements every rule from Section 5 of the spec: option-code-to-label resolution, affects_ai_preview exclusion, empty-placeholder cleanup with punctuation tidy-up, and a genuinely thoughtful custom_text sanitizer (HTML stripping, repeated-punctuation collapsing, and a real regex list of prompt-injection phrases), not just a token gesture at the requirement.
+Caching correctly refuses to reuse a cached result whenever custom_text is present, matching the spec's explicit "never cache across different custom_text values" rule, and cache hits are logged with generation_time_ms: 0 and excluded from rate-limit counts exactly as specified.
+Rate limiting correctly implements both tiers (per-session ceiling for guests, per-user daily ceiling for logged-in users) and correctly excludes cached hits from the count, per Section 8.
+Error handling never leaks raw provider error text to the client — ai_provider_client failures are logged internally with full detail but the client only ever sees a generic message, and timeout vs. generic failure are correctly mapped to 504 vs. 502.
+Admin auth test (test_compliance.py) explicitly tests and rejects loose-substring tokens and query-param bypass attempts, which shows real security awareness rather than a token happy-path test only.
+MongoDB indexes on user_id, session_id, category_id, and created_at are created exactly as specified in Section 2.1, supporting the documented access patterns (history lookups, guest rate limiting, admin analytics, cleanup jobs).
+7. Test Suite Verification
+All 5 test files were executed directly (not just read) against a live Python 3.12 environment:
+test_ai_service.py — 3/3 pass (orchestration success, rate-limited, cache-hit paths).
+test_prompt_builder.py — 3/3 pass (label resolution, affects_ai_preview exclusion, sanitizer).
+test_compliance.py — 2/2 pass (admin auth incl. bypass/loose-token rejection, filtering).
+test_flask_success.py — 1/1 pass (end-to-end POST /api/ai/generate-preview).
+test_user_routes.py — 4/4 pass (401/403/200 ownership + admin-override paths).
+13/13 tests pass. However, as noted in Finding #2, three of the five test files instantiate the full Flask app via create_app() in setUp(), which attempts a real MongoDB connection for index creation on every single test method. With no local MongoDB running, each instantiation stalls for roughly 20-30 seconds before failing open with a warning. This does not fail the tests, but it makes the suite painfully slow (multiple minutes total) and would likely cause CI timeouts unless a MongoDB service container is provisioned or the app factory is adjusted to skip index creation in a testing config.
+8. Recommendations Before Merge
+Fix upload_to_cloudinary() to distinguish "no credentials configured" (fine to mock in dev) from "upload call raised an exception" (should propagate as a failure, not a fake success). A generation should never be logged status: "success" with a URL that doesn't point to a real uploaded asset.
+Add a testing config (e.g. TESTING=True short-circuits create_indexes(), or use mongomock) so the suite runs in seconds and doesn't depend on a live database.
+Confirm with the Module 1 (Auth) lead when the real JWT middleware will replace the X-User-Id header trust, and track it so it isn't forgotten.
+Confirm the ownership split for PUT /api/admin/categories/:id/ai-prompt-template with the Module 2 lead in writing, per the spec's own note.
+Flesh out README.md with setup steps and the full env var list — currently just the module name.
+9. Conclusion
+This is a well-structured, spec-literate implementation — the intern clearly read Sections 1-12 closely rather than guessing at a generic AI-wrapper API, and the trickier rules (cache bypass on custom_text, excluding cache hits from rate limits, never leaking provider errors) are all correctly handled. At an estimated 84% completion, the remaining work is concentrated in one real bug (the Cloudinary silent-fallback issue), one already-flagged security placeholder, and test/DX hardening — none of which require architectural rework. Recommended: address Finding #1 (High) before this touches a real order flow, then merge.

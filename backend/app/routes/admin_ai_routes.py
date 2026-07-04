@@ -1,11 +1,23 @@
-<<<<<<< HEAD
 import datetime
-from flask import Blueprint, request, jsonify
+import logging
+from flask import Blueprint, request, jsonify, g
 from bson import ObjectId
+from datetime import timezone
+
+# Imports from both versions to support everything cleanly
 from app.database import ai_generations
 from app.utils.auth import admin_required
+from app.models.ai_generation import get_all_generations_admin
+from app.utils.auth_helpers import require_admin
 
-admin_ai_blueprint = Blueprint('admin_ai', __name__)
+logger = logging.getLogger(__name__)
+
+# HEAD Blueprint:
+admin_ai_blueprint = Blueprint('admin_ai_legacy', __name__)
+
+# origin/main Blueprint:
+admin_ai_bp = Blueprint("admin_ai", __name__, url_prefix="/api/admin/ai")
+
 
 def clean_doc(doc):
     """Helper to convert MongoDB ObjectIds to strings for JSON serialization."""
@@ -22,6 +34,9 @@ def clean_doc(doc):
         doc["created_at"] = doc["created_at"].isoformat()
     return doc
 
+
+# ─── HEAD Routes ──────────────────────────────────────────────────────────────────
+
 @admin_ai_blueprint.route('/api/admin/ai/generations', methods=['GET'])
 @admin_required
 def handle_get_admin_generations():
@@ -29,11 +44,9 @@ def handle_get_admin_generations():
     Admin-only analytics endpoint. Filters list by category, status, and date range.
     Uses high-performance cursor-based pagination.
     """
-    # Pagination
     limit = int(request.args.get("limit", 20))
-    next_cursor = request.args.get("next_cursor") # ObjectId representing the cursor position
+    next_cursor = request.args.get("next_cursor")
     
-    # Filtering parameters
     category_id = request.args.get("category_id")
     status = request.args.get("status")
     start_date_str = request.args.get("start_date")
@@ -41,7 +54,6 @@ def handle_get_admin_generations():
     
     query = {}
     
-    # 1. Apply cursor constraints (older documents have smaller ObjectIds)
     if next_cursor:
         try:
             query["_id"] = {"$lt": ObjectId(next_cursor)}
@@ -52,7 +64,6 @@ def handle_get_admin_generations():
                 "message": "Invalid next_cursor format. Must be a valid ObjectId."
             }), 400
 
-    # 2. Apply general filters
     if category_id:
         try:
             query["category_id"] = ObjectId(category_id)
@@ -78,7 +89,6 @@ def handle_get_admin_generations():
             query["created_at"] = date_query
 
     try:
-        # Cursor pagination: sort by _id descending, limit to requested size
         projection = {
             "_id": 1,
             "user_id": 1,
@@ -94,7 +104,6 @@ def handle_get_admin_generations():
         cursor = ai_generations.find(query, projection).sort("_id", -1).limit(limit)
         data = [clean_doc(doc) for doc in cursor]
         
-        # Determine the cursor for the next page (the ID of the last item returned)
         new_next_cursor = data[-1]["_id"] if data else None
         
         return jsonify({
@@ -111,33 +120,9 @@ def handle_get_admin_generations():
             "success": False,
             "message": f"Error fetching analytics data: {str(e)}"
         }), 500
-=======
-"""
-admin_ai_routes.py — Module 5 AI Preview Generation
-Admin-only routes for AI usage analytics.
 
-OWNER: Backend Member 2 (Gokul — T4)
-This file implements the full administrative route logic.
 
-Routes:
-  GET /api/admin/ai/generations
-      Full list, filterable by category/status/date, paginated.
-      Powers the admin AI-usage analytics view (Module 12 dashboard).
-
-GUARDRAIL: Do NOT implement PUT /api/admin/categories/:id/ai-prompt-template here.
-That route belongs to Module 2 (which owns category writes). See spec §9 note.
-"""
-import logging
-from flask import Blueprint, request, jsonify, g
-from datetime import datetime, timezone
-
-from app.models.ai_generation import get_all_generations_admin
-from app.utils.auth_helpers import require_admin
-
-logger = logging.getLogger(__name__)
-
-admin_ai_bp = Blueprint("admin_ai", __name__, url_prefix="/api/admin/ai")
-
+# ─── origin/main Routes ───────────────────────────────────────────────────────────
 
 @admin_ai_bp.route("/generations", methods=["GET"])
 @require_admin
@@ -145,14 +130,6 @@ def list_all_generations():
     """
     Admin: full AI generation list, filterable by category, status, date range.
     Paginated. Powers the Module 12 admin analytics dashboard.
-
-    Query params:
-        category_id  (str, optional)
-        status       (str, optional: "success" | "failed" | "rate_limited")
-        date_from    (str, optional: ISO8601)
-        date_to      (str, optional: ISO8601)
-        page         (int, default 1)
-        per_page     (int, default 50, max 200)
     """
     category_id = request.args.get("category_id")
     status = request.args.get("status")
@@ -163,11 +140,11 @@ def list_all_generations():
     date_to = None
     try:
         if date_from_str:
-            date_from = datetime.fromisoformat(date_from_str).replace(
+            date_from = datetime.datetime.fromisoformat(date_from_str).replace(
                 tzinfo=timezone.utc
             )
         if date_to_str:
-            date_to = datetime.fromisoformat(date_to_str).replace(
+            date_to = datetime.datetime.fromisoformat(date_to_str).replace(
                 tzinfo=timezone.utc
             )
     except ValueError:
@@ -197,4 +174,4 @@ def list_all_generations():
             "per_page": per_page,
         },
     }), 200
->>>>>>> origin/main
+

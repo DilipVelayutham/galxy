@@ -1,6 +1,9 @@
-<<<<<<< HEAD
 import datetime
+from datetime import timezone
 from bson import ObjectId
+from app.db import get_db
+
+# ─── Class-based Model (HEAD) ───────────────────────────────────────────────────
 
 class AIGeneration:
     """
@@ -24,11 +27,10 @@ class AIGeneration:
         self.status = status
         self.error_message = error_message
         self.generation_time_ms = generation_time_ms
-        self.created_at = created_at or datetime.datetime.utcnow()
+        self.created_at = created_at or datetime.datetime.now(timezone.utc)
 
     def to_dict(self):
         """Converts the model fields into a dictionary matching MongoDB storage format."""
-        # Convert user_id, category_id, and product_id to ObjectId if they are strings
         user_obj_id = None
         if self.user_id:
             try:
@@ -88,24 +90,14 @@ class AIGeneration:
             generation_time_ms=doc.get("generation_time_ms", 0),
             created_at=doc.get("created_at")
         )
-=======
-"""
-ai_generation.py — Module 5 AI Preview Generation
-MongoDB document model for the ai_generations collection.
-Owns the schema definition, index declaration, and CRUD helpers.
-"""
-from datetime import datetime, timezone
-from bson import ObjectId
-from app.db import get_db
 
+# ─── Function-based Query & Indexing Utilities (origin/main) ─────────────────────
 
-# ─── Collection accessor ─────────────────────────────────────────────────────────
 def get_collection():
     """Return the ai_generations collection from the shared DB connection."""
     return get_db()["ai_generations"]
 
 
-# ─── Index initializer (call once at app startup) ────────────────────────────────
 def ensure_indexes():
     """
     Create indexes declared in the Module 5 spec:
@@ -121,7 +113,6 @@ def ensure_indexes():
     col.create_index("created_at")
 
 
-# ─── Document factory ────────────────────────────────────────────────────────────
 def build_document(
     *,
     user_id,            # ObjectId | None (None = guest)
@@ -155,18 +146,16 @@ def build_document(
         "status": status,
         "error_message": error_message,
         "generation_time_ms": generation_time_ms,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.datetime.now(timezone.utc) if hasattr(datetime, 'datetime') else datetime.now(timezone.utc),
     }
 
 
-# ─── Insert ──────────────────────────────────────────────────────────────────────
 def insert_generation(doc: dict) -> str:
     """Insert a generation document; return its string _id."""
     result = get_collection().insert_one(doc)
     return str(result.inserted_id)
 
 
-# ─── Queries ─────────────────────────────────────────────────────────────────────
 def get_user_generations(user_id, page: int = 1, per_page: int = 20) -> list[dict]:
     """
     Return paginated generation history for a logged-in user,
@@ -204,8 +193,8 @@ def get_all_generations_admin(
     *,
     category_id=None,
     status: str | None = None,
-    date_from: datetime | None = None,
-    date_to: datetime | None = None,
+    date_from: datetime.datetime | None = None,
+    date_to: datetime.datetime | None = None,
     page: int = 1,
     per_page: int = 50,
 ) -> tuple[list[dict], int]:
@@ -231,11 +220,10 @@ def get_all_generations_admin(
     return [_serialize(doc) for doc in cursor], total
 
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────────
 def _serialize(doc: dict) -> dict:
     """Convert ObjectId fields to strings for JSON serialization."""
     for key in ("_id", "user_id", "category_id", "product_id"):
         if key in doc and isinstance(doc[key], ObjectId):
             doc[key] = str(doc[key])
     return doc
->>>>>>> origin/main
+

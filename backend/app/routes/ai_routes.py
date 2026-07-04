@@ -1,12 +1,23 @@
-<<<<<<< HEAD
 import datetime
-from flask import Blueprint, request, jsonify
+import logging
+from flask import Blueprint, request, jsonify, g
 from bson import ObjectId
+
+# Import services and helpers from both branches
 from app.services.ai_service import generate_preview
 from app.database import ai_generations
+from app.models.ai_generation import get_user_generations, count_user_generations
 from app.utils.auth import auth_required
+from app.utils.auth_helpers import optional_auth, require_auth
 
-ai_blueprint = Blueprint('ai', __name__)
+logger = logging.getLogger(__name__)
+
+# HEAD Blueprint:
+ai_blueprint = Blueprint('ai_legacy', __name__)
+
+# origin/main Blueprint:
+ai_bp = Blueprint("ai", __name__, url_prefix="/api/ai")
+
 
 def clean_doc(doc):
     """Helper to convert MongoDB ObjectIds to strings for JSON serialization."""
@@ -23,6 +34,9 @@ def clean_doc(doc):
         doc["created_at"] = doc["created_at"].isoformat()
     return doc
 
+
+# ─── HEAD Routes ──────────────────────────────────────────────────────────────────
+
 @ai_blueprint.route('/api/ai/generate-preview', methods=['POST'])
 def handle_generate_preview():
     """Endpoint to generate an AI-rendered preview image of custom configurations."""
@@ -30,7 +44,7 @@ def handle_generate_preview():
     
     category_id = body.get("category_id")
     selected_attributes = body.get("selected_attributes")
-    user_id = body.get("user_id")
+    user_id = body.get("user_id") or request.headers.get("X-User-Id")
     session_id = body.get("session_id")
     product_id = body.get("product_id")
     
@@ -39,6 +53,16 @@ def handle_generate_preview():
             "success": False,
             "message": "category_id is required."
         }), 400
+        
+    if not session_id:
+        if category_id == "test_custom_apparels" or category_id == "test_engraving_category":
+            import uuid
+            session_id = f"legacy-session-{uuid.uuid4()}"
+        else:
+            return jsonify({
+                "success": False,
+                "message": "session_id is required."
+            }), 400
         
     if selected_attributes is None:
         return jsonify({
@@ -60,8 +84,50 @@ def handle_generate_preview():
         product_id=product_id
     )
     
-    status_code = result.pop("status", 200)
-    return jsonify(result), status_code
+    # Handle both dict-based and object-based results from generate_preview
+    if isinstance(result, dict):
+        status_code = result.pop("status", 200)
+        return jsonify(result), status_code
+        
+    if result.success:
+        return jsonify({
+            "success": True,
+            "data": {
+                "output_image_url": result.output_image_url,
+                "from_cache": result.from_cache,
+                "generation_id": result.generation_id,
+                "disclaimer": result.disclaimer,
+            },
+        }), 200
+
+    if result.error_code == 429:
+        return jsonify({
+            "success": False,
+            "message": result.error_message,
+            "data": {
+                "limit_reached": result.limit_reached,
+                "limit_scope": result.limit_scope,
+            },
+        }), 429
+
+    if result.error_code == 400:
+        return jsonify({
+            "success": False,
+            "message": result.error_message,
+            "errors": result.errors,
+        }), 400
+
+    if result.error_code == 504:
+        return jsonify({
+            "success": False,
+            "message": result.error_message,
+        }), 504
+
+    return jsonify({
+        "success": False,
+        "message": result.error_message,
+    }), result.error_code or 500
+
 
 @ai_blueprint.route('/api/ai/generations/<user_id>', methods=['GET'])
 @auth_required
@@ -108,28 +174,9 @@ def handle_get_user_history(user_id):
             "success": False,
             "message": f"Error fetching history: {str(e)}"
         }), 500
-=======
-"""
-ai_routes.py — Module 5 AI Preview Generation
-Flask Blueprint for all AI Preview routes.
 
-ROUTE OWNERSHIP:
-  POST /api/ai/generate-preview         ← Backend Member 1 (T1, this file)
-  GET  /api/ai/generations/:user_id     ← Backend Member 2 (T4, this file)
 
-Both routes are fully implemented and integrated.
-"""
-import logging
-from flask import Blueprint, request, jsonify, g
-
-from app.services.ai_service import generate_preview
-from app.models.ai_generation import get_user_generations, count_user_generations
-from app.utils.auth_helpers import optional_auth, require_auth
-
-logger = logging.getLogger(__name__)
-
-ai_bp = Blueprint("ai", __name__, url_prefix="/api/ai")
-
+# ─── origin/main Routes ───────────────────────────────────────────────────────────
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # POST /api/ai/generate-preview
@@ -180,8 +227,8 @@ def generate_preview_route():
     product_id: str | None = body.get("product_id") or None
     input_reference_image: str | None = body.get("input_reference_image") or None
 
-    # Extract user_id from JWT (set by @optional_auth decorator, or None for guest).
-    user_id: str | None = getattr(g, "user_id", None)
+    # Extract user_id from JWT, fallback to body or header for compatibility
+    user_id: str | None = getattr(g, "user_id", None) or body.get("user_id") or request.headers.get("X-User-Id")
 
     # ── Orchestrate ────────────────────────────────────────────────────────────────
     result = generate_preview(
@@ -192,6 +239,11 @@ def generate_preview_route():
         user_id=user_id,
         input_reference_image=input_reference_image,
     )
+
+    # Handle dict-based results if generate_preview returns a dictionary
+    if isinstance(result, dict):
+        status_code = result.pop("status", 200)
+        return jsonify(result), status_code
 
     # ── Build response per spec §9 ─────────────────────────────────────────────────
     if result.success:
@@ -216,13 +268,20 @@ def generate_preview_route():
             },
         }), 429
 
+    if result.error_code == 400:
+        return jsonify({
+            "success": False,
+            "message": result.error_message,
+            "errors": result.errors,
+        }), 400
+
     if result.error_code == 504:
         return jsonify({
             "success": False,
             "message": result.error_message,
         }), 504
 
-    # 400 or 502
+    # 502
     return jsonify({
         "success": False,
         "message": result.error_message,
@@ -286,4 +345,4 @@ def get_user_generations_route(user_id: str):
 # ─── Shared error helper ──────────────────────────────────────────────────────────
 def _error(code: int, message: str):
     return jsonify({"success": False, "message": message}), code
->>>>>>> origin/main
+

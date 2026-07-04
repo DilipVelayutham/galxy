@@ -19,10 +19,15 @@ AI_FREE_GENERATIONS_PER_SESSION = int(os.getenv("AI_FREE_GENERATIONS_PER_SESSION
 AI_MAX_GENERATIONS_PER_USER_PER_DAY = int(os.getenv("AI_MAX_GENERATIONS_PER_USER_PER_DAY", "20"))
 
 # MongoDB Configuration
-MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://lti_platform:open123%21%40%23@ltiplat.hf8dbrx.mongodb.net/?appName=ltiplat")
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    raise ValueError("MONGO_URI environment variable is required but missing.")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "lti_hub_db")
 
 # Cloudinary Configuration
-CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "dsmwxqrcz")
-CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY", "615293245289625")
-CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET", "ukIm85Mx3_3xeBqKSEcB4UGSxcE")
+CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
+
+if not all([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
+    raise ValueError("Cloudinary configuration environment variables (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) are required but missing.")

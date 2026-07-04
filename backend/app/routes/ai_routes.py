@@ -79,7 +79,15 @@ def handle_get_user_history(user_id):
         }
         
         total = ai_generations.count_documents(query)
-        cursor = ai_generations.find(query).sort("created_at", -1).skip(skip).limit(limit)
+        projection = {
+            "_id": 1,
+            "product_id": 1,
+            "category_id": 1,
+            "selected_attributes": 1,
+            "output_image_url": 1,
+            "created_at": 1
+        }
+        cursor = ai_generations.find(query, projection).sort("created_at", -1).skip(skip).limit(limit)
         
         data = [clean_doc(doc) for doc in cursor]
         total_pages = (total + limit - 1) // limit if total > 0 else 0

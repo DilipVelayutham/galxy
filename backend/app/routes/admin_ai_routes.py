@@ -78,7 +78,19 @@ def handle_get_admin_generations():
 
     try:
         # Cursor pagination: sort by _id descending, limit to requested size
-        cursor = ai_generations.find(query).sort("_id", -1).limit(limit)
+        projection = {
+            "_id": 1,
+            "user_id": 1,
+            "category_id": 1,
+            "product_id": 1,
+            "selected_attributes": 1,
+            "output_image_url": 1,
+            "status": 1,
+            "error_message": 1,
+            "generation_time_ms": 1,
+            "created_at": 1
+        }
+        cursor = ai_generations.find(query, projection).sort("_id", -1).limit(limit)
         data = [clean_doc(doc) for doc in cursor]
         
         # Determine the cursor for the next page (the ID of the last item returned)

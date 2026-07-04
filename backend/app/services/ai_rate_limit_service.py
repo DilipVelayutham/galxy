@@ -16,7 +16,7 @@ def check_rate_limit(user_id=None, session_id=None, ip_address=None):
         try:
             count = ai_generations.count_documents({
                 "user_id": user_id,
-                "status": "success",
+                "status": {"$in": ["success", "failed"]},
                 "generation_time_ms": {"$gt": 0},
                 "created_at": {"$gte": today_start}
             })
@@ -50,7 +50,7 @@ def check_rate_limit(user_id=None, session_id=None, ip_address=None):
             if session_id:
                 count = ai_generations.count_documents({
                     "session_id": session_id,
-                    "status": "success",
+                    "status": {"$in": ["success", "failed"]},
                     "generation_time_ms": {"$gt": 0}
                 })
                 
@@ -67,7 +67,7 @@ def check_rate_limit(user_id=None, session_id=None, ip_address=None):
                 twenty_four_hours_ago = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
                 ip_count = ai_generations.count_documents({
                     "ip_address": ip_address,
-                    "status": "success",
+                    "status": {"$in": ["success", "failed"]},
                     "generation_time_ms": {"$gt": 0},
                     "user_id": None,
                     "created_at": {"$gte": twenty_four_hours_ago}
@@ -78,7 +78,8 @@ def check_rate_limit(user_id=None, session_id=None, ip_address=None):
                     return {
                         "allowed": False,
                         "limit_reached": True,
-                        "limit_scope": "ip"
+                        # Fold IP-based block into session scope to adhere to frontend two-valued contract
+                        "limit_scope": "session"
                     }
                     
             print(f"[Rate Limit] Guest check passed for Session ID: {session_id}, IP: {ip_address}")

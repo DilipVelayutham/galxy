@@ -4,12 +4,31 @@ import unittest.mock
 import uuid
 import datetime
 from bson import ObjectId
+import os
+import mongomock
 
 # Set environment variables for testing before imports
-import os
 os.environ["MOCK_AI"] = "True"
 os.environ["AI_FREE_GENERATIONS_PER_SESSION"] = "5"
 os.environ["AI_MAX_GENERATIONS_PER_USER_PER_DAY"] = "20"
+
+# Mock/Provide dummy credentials for ai_config checks
+os.environ["MONGO_URI"] = "mongodb://localhost:27017/test_db"
+os.environ["CLOUDINARY_CLOUD_NAME"] = "mock_cloud"
+os.environ["CLOUDINARY_API_KEY"] = "mock_key"
+os.environ["CLOUDINARY_API_SECRET"] = "mock_secret"
+
+# Patch pymongo.MongoClient to use mongomock.MongoClient BEFORE importing database module
+import pymongo
+pymongo.MongoClient = mongomock.MongoClient
+
+# Mock Cloudinary upload & destroy globally for unit tests to prevent external API calls
+import cloudinary.uploader
+cloudinary.uploader.upload = lambda file, **options: {
+    "secure_url": "https://res.cloudinary.com/mock_cloud/image/upload/v1/mock.png",
+    "public_id": "galxy/ai-previews/mock_public_id"
+}
+cloudinary.uploader.destroy = lambda public_id, **options: {"result": "ok"}
 
 from app import create_app
 from app.database import categories, ai_generations, ai_cache
@@ -273,7 +292,7 @@ class TestAIPreviewGeneration(unittest.TestCase):
                                    content_type='application/json')
         self.assertEqual(response.status_code, 429)
         data = json.loads(response.data.decode('utf-8'))
-        self.assertEqual(data["data"]["limit_scope"], "ip")
+        self.assertEqual(data["data"]["limit_scope"], "session")
 
     @unittest.mock.patch('cloudinary.uploader.upload')
     @unittest.mock.patch('cloudinary.uploader.destroy')

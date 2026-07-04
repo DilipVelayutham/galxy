@@ -2,41 +2,58 @@ import hashlib
 import json
 import datetime
 from bson import ObjectId
-from app.database import ai_cache
+from app.database import categories, ai_cache
 
 def generate_cache_key(category_id, selected_attributes):
     """
     Generates a deterministic SHA256 hash key for caching.
     Sorts attributes alphabetically by key to prevent key-order misses.
-    Computes SHA256(category_id + sorted_alphabetic(selected_attributes))
+    Computes SHA256(category_id + JSON(sorted_cleaned_attributes))
+    Uses an unambiguous JSON structure to prevent collisions.
     """
     cat_str = str(category_id)
     
-    # Sort selected_attributes alphabetically by key
-    sorted_keys = sorted(selected_attributes.keys())
-    
-    # Concatenate alphabetically: category_id + key1:val1 + key2:val2 ...
-    attrs_str = "".join(
-        f"{k}:{selected_attributes[k]}"
-        for k in sorted_keys
-        if selected_attributes[k] is not None and str(selected_attributes[k]).strip() != ""
-    )
-    
-    combined_string = f"{cat_str}:{attrs_str}"
+    # Clean selected_attributes to remove None or empty values
+    cleaned_attributes = {}
+    for k in sorted(selected_attributes.keys()):
+        val = selected_attributes[k]
+        if val is not None and str(val).strip() != "":
+            cleaned_attributes[k] = val
+            
+    # Serialize to deterministic JSON string
+    attrs_json = json.dumps(cleaned_attributes, sort_keys=True)
+    combined_string = f"{cat_str}:{attrs_json}"
     sha256 = hashlib.sha256(combined_string.encode('utf-8'))
     return sha256.hexdigest()
 
-def is_cache_bypassed(selected_attributes):
+def is_cache_bypassed(category_id, selected_attributes):
     """
     Returns True if the payload contains custom_text or free text selections,
     which bypasses the cache lookup and storage entirely.
     """
-    # Any custom_text value bypasses cache lookup/storage (unique designs)
-    custom_text_val = selected_attributes.get("custom_text")
-    if custom_text_val is not None and str(custom_text_val).strip() != "":
-        return True
-        
-    # Check for generic text input fields in selected attributes
+    text_keys = {"custom_text"} # always include default custom_text
+    
+    try:
+        try:
+            cat_obj_id = ObjectId(category_id) if isinstance(category_id, str) and len(category_id) == 24 else category_id
+        except Exception:
+            cat_obj_id = category_id
+            
+        category = categories.find_one({"$or": [{"_id": cat_obj_id}, {"category_id": category_id}]})
+        if category and "attribute_schema" in category:
+            for attr in category["attribute_schema"]:
+                if attr.get("type") == "text_input":
+                    text_keys.add(attr.get("key"))
+    except Exception as e:
+        print(f"[Cache Service] Error fetching category schema: {e}")
+
+    # Check if any text/free-text attribute has a non-empty value
+    for k in text_keys:
+        val = selected_attributes.get(k)
+        if val is not None and str(val).strip() != "":
+            return True
+            
+    # Fallback to key substring heuristic to be safe
     for key, val in selected_attributes.items():
         if "text" in key.lower() and val is not None and str(val).strip() != "":
             return True
@@ -51,7 +68,7 @@ def check_cache(category_id, selected_attributes):
         dict: { "hit": bool, "output_image_url": str | None }
     """
     # Check if this configuration contains custom text which bypasses cache
-    if is_cache_bypassed(selected_attributes):
+    if is_cache_bypassed(category_id, selected_attributes):
         print("[Cache Service] Cache lookup bypassed due to custom text.")
         return {"hit": False, "output_image_url": None}
         
@@ -71,7 +88,7 @@ def check_cache(category_id, selected_attributes):
 
 def store_cache(category_id, selected_attributes, output_image_url):
     """Stores a successful configuration-to-image mapping in the cache database."""
-    if is_cache_bypassed(selected_attributes):
+    if is_cache_bypassed(category_id, selected_attributes):
         print("[Cache Service] Cache storage bypassed due to custom text.")
         return
         

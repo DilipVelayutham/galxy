@@ -15,3 +15,5 @@ backend/app/routes/__pycache__/
 backend/app/models/__pycache__/
 backend/app/configs/__pycache__/
 backend/app/utils/__pycache__/
+*.zip
+

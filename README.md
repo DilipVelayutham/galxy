@@ -7,7 +7,7 @@ This repository contains the front-end implementation for the customer-facing AI
 ## 📂 Project Structure
 
 ```
-model/
+./ (Repository Root)
 ├── assets/                     # Consolidated mock generated assets
 │   ├── neon_default.png        # Default base product image (unlit tubes)
 │   ├── neon_blue.png           # Electric Blue neon glow preview

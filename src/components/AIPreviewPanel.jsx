@@ -33,6 +33,7 @@ export default function AIPreviewPanel({
   // Refs for tracking changes
   const isFirstChange = useRef(true);
   const lastGeneratedAttributes = useRef(null);
+  const prevSelectedAttributes = useRef(selectedAttributes);
 
   // Security Helper: Strip prompt injection keywords and excessive characters
   const sanitizeCustomText = (text) => {
@@ -66,10 +67,22 @@ export default function AIPreviewPanel({
     if (!category) return;
     
     const previewKeys = getAffectsPreviewKeys();
+    const prevAttrs = prevSelectedAttributes.current;
+    prevSelectedAttributes.current = selectedAttributes;
     
     // Skip checking on initial render
     if (isFirstChange.current) {
       isFirstChange.current = false;
+      return;
+    }
+
+    // Check if any of the changed attributes actually affect the preview
+    const changedKeys = previewKeys.filter(key => 
+      selectedAttributes[key] !== prevAttrs[key]
+    );
+
+    if (changedKeys.length === 0) {
+      // Ignore changes if they don't affect visual preview
       return;
     }
 
@@ -82,11 +95,11 @@ export default function AIPreviewPanel({
 
     // Check if the current selection is stale relative to the generated preview
     if (lastGeneratedAttributes.current) {
-      const changedKeys = previewKeys.filter(key => 
+      const staleKeys = previewKeys.filter(key => 
         selectedAttributes[key] !== lastGeneratedAttributes.current[key]
       );
       
-      if (changedKeys.length > 0) {
+      if (staleKeys.length > 0) {
         setIsStale(true);
       } else {
         setIsStale(false);

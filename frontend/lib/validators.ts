@@ -1,3 +1,7 @@
+// TEMPORARY PLACEHOLDER: Owned by in3 (Tharani Jayaprakash).
+// This validators module is kept here temporarily for local authentication forms to function,
+// and should be replaced/removed upon merging in3's branch to avoid conflicts.
+
 export function validateEmail(email: string): { isValid: boolean; error?: string } {
   if (!email) {
     return { isValid: false, error: "Email is required" };

@@ -57,7 +57,8 @@ def signup():
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"Signup failed: {str(e)}"
+            "message": f"Signup failed: {str(e)}",
+            "errors": {}
         }), 500
 
 @auth_bp.route('/login', methods=['POST'])
@@ -101,7 +102,8 @@ def login():
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"Login failed: {str(e)}"
+            "message": f"Login failed: {str(e)}",
+            "errors": {}
         }), 500
 
 @auth_bp.route('/logout', methods=['POST'])
@@ -130,14 +132,16 @@ def refresh():
         # If refresh token fails, clear cookie and force re-login
         response = jsonify({
             "success": False,
-            "message": e.message
+            "message": e.message,
+            "errors": {}
         })
         _clear_refresh_cookie(response)
         return response, e.status_code
     except Exception as e:
         response = jsonify({
             "success": False,
-            "message": f"Token refresh failed: {str(e)}"
+            "message": f"Token refresh failed: {str(e)}",
+            "errors": {}
         })
         _clear_refresh_cookie(response)
         return response, 500

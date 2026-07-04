@@ -260,6 +260,83 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(res_me_cust.status_code, 403)
         self.assertIn("Admins only", res_me_cust.get_json()["message"])
 
+    def test_admin_login_and_refresh_http(self):
+        # Seed admin
+        admin_pass_hash = hash_password("AdminSecurePass1")
+        admin_doc = AdminUser.create_document("Admin Asil", "asil_test@example.com", admin_pass_hash)
+        self.db.admin_users.insert_one(admin_doc)
+        
+        # Test HTTP Admin Login
+        login_data = {
+            "email": "asil_test@example.com",
+            "password": "AdminSecurePass1"
+        }
+        res = self.client.post('/api/admin/auth/login', json=login_data)
+        self.assertEqual(res.status_code, 200)
+        json_data = res.get_json()
+        self.assertTrue(json_data["success"])
+        self.assertEqual(json_data["data"]["admin"]["email"], "asil_test@example.com")
+        self.assertIn("access_token", json_data["data"])
+        
+        # Verify access token payload type and role
+        payload = decode_token(json_data["data"]["access_token"])
+        self.assertEqual(payload["type"], "access")
+        self.assertEqual(payload["role"], "super_admin")
+        
+        # Verify admin_refresh_token Cookie is set
+        cookies = res.headers.getlist('Set-Cookie')
+        self.assertTrue(any('admin_refresh_token=' in c for c in cookies))
+        
+        # Extract refresh token from cookie
+        import re
+        cookie_header = res.headers.get('Set-Cookie')
+        match = re.search(r'admin_refresh_token=([^;]+)', cookie_header)
+        refresh_token = match.group(1) if match else None
+        self.assertIsNotNone(refresh_token)
+        
+        # Decode and verify refresh token payload
+        payload_refresh = decode_token(refresh_token)
+        self.assertEqual(payload_refresh["type"], "refresh")
+        self.assertEqual(payload_refresh["role"], "super_admin")
+        
+        # Test HTTP Admin Refresh
+        self.client.set_cookie('admin_refresh_token', refresh_token, path='/api/admin/auth')
+        res_refresh = self.client.post('/api/admin/auth/refresh')
+        self.assertEqual(res_refresh.status_code, 200)
+        json_refresh = res_refresh.get_json()
+        self.assertTrue(json_refresh["success"])
+        self.assertIn("access_token", json_refresh["data"])
+        
+        # Verify rotated cookie is set
+        refresh_cookies = res_refresh.headers.getlist('Set-Cookie')
+        self.assertTrue(any('admin_refresh_token=' in c for c in refresh_cookies))
+
+    def test_token_type_mismatch_refresh(self):
+        # 1. Generate access token for customer
+        user_id = ObjectId()
+        access_token = generate_access_token(user_id, "customer")
+        
+        # Try to refresh using customer access token as refresh token cookie
+        self.client.set_cookie('refresh_token', access_token, path='/api/auth')
+        res = self.client.post('/api/auth/refresh')
+        self.assertEqual(res.status_code, 401)
+        json_data = res.get_json()
+        self.assertFalse(json_data["success"])
+        self.assertIn("Invalid token type", json_data["message"])
+        self.assertIn("errors", json_data)
+        
+        # 2. Try to refresh using admin access token as admin refresh token cookie
+        admin_id = ObjectId()
+        admin_access_token = generate_access_token(admin_id, "super_admin")
+        
+        self.client.set_cookie('admin_refresh_token', admin_access_token, path='/api/admin/auth')
+        res_admin = self.client.post('/api/admin/auth/refresh')
+        self.assertEqual(res_admin.status_code, 401)
+        json_admin_data = res_admin.get_json()
+        self.assertFalse(json_admin_data["success"])
+        self.assertIn("Invalid token type", json_admin_data["message"])
+        self.assertIn("errors", json_admin_data)
+
     def test_rate_limiter(self):
         from app.utils.rate_limiter import RateLimiter
         # Create a fresh limiter with low limit for easy testing

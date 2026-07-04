@@ -100,6 +100,10 @@ class AuthService:
         except Exception:
             raise AuthServiceError("Refresh token invalid/expired", 401)
 
+        # Ensure correct token type
+        if payload.get("type") != "refresh":
+            raise AuthServiceError("Invalid token type", 401)
+
         # Ensure correct role
         role = payload.get("role")
         if role != "customer":

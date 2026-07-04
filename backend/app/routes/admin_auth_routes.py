@@ -31,16 +31,16 @@ def _clear_refresh_cookie(response):
         samesite='Lax'
     )
 
+from app.services.admin_auth_service import AdminAuthService, AdminAuthServiceError
+
 @admin_auth_bp.route('/login', methods=['POST'])
 def login():
-    # In4 (Arun) will implement the full DB query / authentication logic.
-    # Here is a basic working implementation for admin login to show how it reuses token_helper.
     data = request.get_json() or {}
     email = data.get("email")
     password = data.get("password")
     
     if not email or not password:
-        return jsonify({"success": False, "message": "Email and password are required"}), 400
+        return jsonify({"success": False, "message": "Email and password are required", "errors": {}}), 400
         
     # Rate limiting on IP + Email combo
     ip_addr = request.remote_addr or "unknown_ip"
@@ -49,30 +49,63 @@ def login():
     if admin_login_limiter.is_rate_limited(rate_key):
         return jsonify({
             "success": False,
-            "message": "Too many login attempts. Please try again after 15 minutes."
+            "message": "Too many login attempts. Please try again after 15 minutes.",
+            "errors": {}
         }), 429
         
-    db = get_db()
-    admin = db.admin_users.find_one({"email": email.strip().lower()})
-    
-    if not admin or not verify_password(password, admin.get("password_hash")):
-        return jsonify({"success": False, "message": "Invalid credentials"}), 401
-        
-    if not admin.get("is_active", True):
-        return jsonify({"success": False, "message": "Account deactivated"}), 403
+    try:
+        admin_dict, access_token, refresh_token = AdminAuthService.login_admin(email, password)
+        response = jsonify({
+            "success": True,
+            "data": {
+                "admin": admin_dict,
+                "access_token": access_token
+            }
+        })
+        _set_refresh_cookie(response, refresh_token)
+        return response, 200
+    except AdminAuthServiceError as e:
+        return jsonify({
+            "success": False,
+            "message": e.message,
+            "errors": {}
+        }), e.status_code
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Admin login failed: {str(e)}",
+            "errors": {}
+        }), 500
 
-    access_token = generate_access_token(admin["_id"], "super_admin")
-    refresh_token = generate_refresh_token(admin["_id"], "super_admin")
-    
-    response = jsonify({
-        "success": True,
-        "data": {
-            "admin": AdminUser.to_public_dict(admin),
-            "access_token": access_token
-        }
-    })
-    _set_refresh_cookie(response, refresh_token)
-    return response, 200
+@admin_auth_bp.route('/refresh', methods=['POST'])
+def refresh():
+    refresh_token = request.cookies.get(COOKIE_NAME)
+    try:
+        new_access, new_refresh = AdminAuthService.refresh_admin_tokens(refresh_token)
+        response = jsonify({
+            "success": True,
+            "data": {
+                "access_token": new_access
+            }
+        })
+        _set_refresh_cookie(response, new_refresh)
+        return response, 200
+    except AdminAuthServiceError as e:
+        response = jsonify({
+            "success": False,
+            "message": e.message,
+            "errors": {}
+        })
+        _clear_refresh_cookie(response)
+        return response, e.status_code
+    except Exception as e:
+        response = jsonify({
+            "success": False,
+            "message": f"Token refresh failed: {str(e)}",
+            "errors": {}
+        })
+        _clear_refresh_cookie(response)
+        return response, 500
 
 @admin_auth_bp.route('/logout', methods=['POST'])
 def logout():

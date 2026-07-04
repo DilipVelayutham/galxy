@@ -1,0 +1,29 @@
+<<<<<<< HEAD
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+venv/
+ENV/
+*.log
+=======
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
+# Environment files
+.env
+.env.local
+
+# IDE/OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+>>>>>>> origin/main

@@ -1,0 +1,159 @@
+GALXY
+Custom Lighting & Craft Studio
+Module 5 — AI Preview Generation
+Intern Submission Review
+Reviewed: July 3, 2026
+Reviewed submission | module-5-ai-preview-generation-feat-m5-frontend2.zip
+Reviewed submission
+module-5-ai-preview-generation-feat-m5-frontend2.zip
+Reference spec | GALXY — Module 5: AI Preview Generation (July 2026)
+Reference spec
+GALXY — Module 5: AI Preview Generation (July 2026)
+What was actually delivered | Backend only — labelled internally as "Backend 1 (T1 + T2)": orchestration, prompt builder, Gemini adapter, POST route. No frontend, despite the branch name "feat-m5-frontend2".
+What was actually delivered
+Backend only — labelled internally as "Backend 1 (T1 + T2)": orchestration, prompt builder, Gemini adapter, POST route. No frontend, despite the branch name "feat-m5-frontend2".
+Overall completion | ~45% of the full module spec
+Overall completion
+~45% of the full module spec
+
+1. Summary
+The submission implements the backend core of Module 5 — the orchestration engine, prompt templating, Gemini provider adapter, the data model, and the primary API routes — to a solid standard, with real unit/integration tests. However, two pieces the spec calls out as essential (§1: "since the AI provider's free tier has real usage limits") are left as no-op stubs: caching and rate limiting. There is also no frontend in this submission, and one real bug (Module 4 validation "fails open" on error) undercuts the cost-control story further.
+Net effect: what's built is good quality, but the module cannot safely go live as-is — it would let unlimited, unthrottled Gemini calls through the moment Module 4 has a hiccup.
+2. Completion by Spec Section
+Spec Area | Status | Est. % | Notes
+Spec Area
+Status
+Est. %
+Notes
+§2 ai_generations model | Done | 100% | Matches schema exactly incl. all 4 indexes. Clean, well-documented.
+§2 ai_generations model
+Done
+100%
+Matches schema exactly incl. all 4 indexes. Clean, well-documented.
+§3 Folder structure | Done | 90% | Matches spec 1:1, except no dedicated app/utils/cloudinary_helper.py (upload logic inlined in ai_service.py instead).
+§3 Folder structure
+Done
+90%
+Matches spec 1:1, except no dedicated app/utils/cloudinary_helper.py (upload logic inlined in ai_service.py instead).
+§5 Prompt builder | Done | 95% | Label resolution, affects_ai_preview exclusion, empty-placeholder cleanup and text sanitization all implemented and unit-tested.
+§5 Prompt builder
+Done
+95%
+Label resolution, affects_ai_preview exclusion, empty-placeholder cleanup and text sanitization all implemented and unit-tested.
+§6 Generation orchestration | Done | 85% | 7-step pipeline implemented faithfully. Weakened by the Module 4 "fail-open" bug below.
+§6 Generation orchestration
+Done
+85%
+7-step pipeline implemented faithfully. Weakened by the Module 4 "fail-open" bug below.
+§7 Caching | Stub only | 0% | check_cache()/store_cache() are placeholder functions that always return None / no-op. No Mongo or Redis backing exists yet.
+§7 Caching
+Stub only
+0%
+check_cache()/store_cache() are placeholder functions that always return None / no-op. No Mongo or Redis backing exists yet.
+§8 Rate limiting | Stub only | 0% | check_rate_limit() always returns "allowed", increment_usage() is a no-op. Guest/user quotas are not enforced at all.
+§8 Rate limiting
+Stub only
+0%
+check_rate_limit() always returns "allowed", increment_usage() is a no-op. Guest/user quotas are not enforced at all.
+§9 API contract — POST generate-preview | Done | 90% | Request/response shapes match spec, incl. 429 shape. Untestable end-to-end while §7/§8 are stubs.
+§9 API contract — POST generate-preview
+Done
+90%
+Request/response shapes match spec, incl. 429 shape. Untestable end-to-end while §7/§8 are stubs.
+§9 GET /generations/:user_id | Done | 80% | Implemented (not just stubbed as the code comments claim) with ownership + pagination.
+§9 GET /generations/:user_id
+Done
+80%
+Implemented (not just stubbed as the code comments claim) with ownership + pagination.
+§9 GET /admin/ai/generations | Done | 80% | Implemented with filters + pagination, despite docstring saying "stub".
+§9 GET /admin/ai/generations
+Done
+80%
+Implemented with filters + pagination, despite docstring saying "stub".
+§9 PUT category ai-prompt-template | N/A by design | — | Correctly NOT built here — spec explicitly assigns this route to Module 2. Good discipline.
+§9 PUT category ai-prompt-template
+N/A by design
+—
+Correctly NOT built here — spec explicitly assigns this route to Module 2. Good discipline.
+§10 Cloudinary integration | Partial | 60% | Uploads to correct galxy/ai-previews/ folder, but no shared cloudinary_helper.py was created as the spec requested for Modules 3/10 to reuse.
+§10 Cloudinary integration
+Partial
+60%
+Uploads to correct galxy/ai-previews/ folder, but no shared cloudinary_helper.py was created as the spec requested for Modules 3/10 to reuse.
+§11 Boundaries respected | Done | 100% | Never re-implements Module 4 validation logic or Module 2 template ownership — delegates correctly in intent.
+§11 Boundaries respected
+Done
+100%
+Never re-implements Module 4 validation logic or Module 2 template ownership — delegates correctly in intent.
+§12 Handoff contracts | Partial | 60% | Response shape & 429 shape are frozen correctly. URL stability claim can't be verified since Cloudinary overwrite=False/unique_filename=True is fine, but nothing guards against re-generation overwriting a cached URL other modules may have stored.
+§12 Handoff contracts
+Partial
+60%
+Response shape & 429 shape are frozen correctly. URL stability claim can't be verified since Cloudinary overwrite=False/unique_filename=True is fine, but nothing guards against re-generation overwriting a cached URL other modules may have stored.
+Frontend (AI Preview Panel, etc.) | Missing | 0% | No frontend code in the zip at all, despite the branch name referencing "frontend2".
+Frontend (AI Preview Panel, etc.)
+Missing
+0%
+No frontend code in the zip at all, despite the branch name referencing "frontend2".
+Tests | Done | 85% | 15 automated tests (6 route, 9 prompt-builder), all mocked — good coverage of what's built, but nothing tests caching/rate-limiting since those are stubs.
+Tests
+Done
+85%
+15 automated tests (6 route, 9 prompt-builder), all mocked — good coverage of what's built, but nothing tests caching/rate-limiting since those are stubs.
+
+3. What's Done Well
+ai_generations model matches the spec's schema and index list exactly.
+Folder structure mirrors §3 almost file-for-file.
+Prompt builder correctly resolves option labels (not raw values), excludes affects_ai_preview:false attributes, sanitizes free text against prompt-injection patterns, and cleans up empty-placeholder punctuation — all backed by dedicated unit tests.
+Orchestration pipeline in ai_service.py follows the 7-step flow from §6 step-by-step, with sensible custom exceptions (ProviderTimeoutError / ProviderError) so raw provider errors never leak to the client, per §6.8.
+Provider adapter is genuinely swappable — a PROVIDER_REGISTRY dict keyed by AI_PROVIDER, exactly the "one function per provider" pattern §4 asks for.
+Correctly declines to build the PUT ai-prompt-template route, honoring §9's note that Module 2 should own it.
+Decent automated test suite (15 tests) with all external dependencies (Mongo, Gemini, Cloudinary, Module 4) mocked out, so tests run in isolation.
+Local/HTTP dual-mode Module 4 client is a thoughtful touch for developing before Module 4 exists — the fail-open behavior in HTTP mode is the only real problem with it.
+4. Issues Found
+Severity | Issue | Detail
+Severity
+Issue
+Detail
+High | Caching not implemented | ai_cache_service.py's check_cache() always returns None and store_cache() is a no-op. Per §7, caching is described as "essential for free-tier cost control" — without it, every page visit with default attributes re-calls the paid Gemini API. This is core scope, not a nice-to-have.
+High
+Caching not implemented
+ai_cache_service.py's check_cache() always returns None and store_cache() is a no-op. Per §7, caching is described as "essential for free-tier cost control" — without it, every page visit with default attributes re-calls the paid Gemini API. This is core scope, not a nice-to-have.
+High | Rate limiting not implemented | ai_rate_limit_service.py's check_rate_limit() always returns allowed=True and increment_usage() is a no-op. Guests and logged-in users currently have unlimited generations — the exact free-tier cost overrun scenario §1 and §8 exist to prevent.
+High
+Rate limiting not implemented
+ai_rate_limit_service.py's check_rate_limit() always returns allowed=True and increment_usage() is a no-op. Guests and logged-in users currently have unlimited generations — the exact free-tier cost overrun scenario §1 and §8 exist to prevent.
+High | Module 4 validation fails open | In module4_client.py, if the HTTP call to Module 4 times out or errors, validate_attributes() returns {valid: True} ("fail open", the code's own comment admits this is temporary). Combined with no rate limiting, an unreachable Module 4 means literally any payload — valid or not — can trigger a paid Gemini call. §6 explicitly requires "if invalid, return 400 immediately, no AI call made"; failing open defeats that guarantee under real-world network hiccups.
+High
+Module 4 validation fails open
+In module4_client.py, if the HTTP call to Module 4 times out or errors, validate_attributes() returns {valid: True} ("fail open", the code's own comment admits this is temporary). Combined with no rate limiting, an unreachable Module 4 means literally any payload — valid or not — can trigger a paid Gemini call. §6 explicitly requires "if invalid, return 400 immediately, no AI call made"; failing open defeats that guarantee under real-world network hiccups.
+Medium | No shared cloudinary_helper.py | §10 explicitly asks that the Cloudinary wrapper be consolidated into app/utils/cloudinary_helper.py so Modules 3/10 can share it. The intern instead wrote _upload_to_cloudinary() directly inside ai_service.py. Functionally fine in isolation, but creates the duplicate-wrapper problem the spec was trying to avoid.
+Medium
+No shared cloudinary_helper.py
+§10 explicitly asks that the Cloudinary wrapper be consolidated into app/utils/cloudinary_helper.py so Modules 3/10 can share it. The intern instead wrote _upload_to_cloudinary() directly inside ai_service.py. Functionally fine in isolation, but creates the duplicate-wrapper problem the spec was trying to avoid.
+Medium | No frontend delivered | The zip/branch name ("feat-m5-frontend2") implies frontend work, but the archive contains backend only. The AI Preview Panel component mentioned in §12 (which depends on the exact 429 shape) does not exist in this submission.
+Medium
+No frontend delivered
+The zip/branch name ("feat-m5-frontend2") implies frontend work, but the archive contains backend only. The AI Preview Panel component mentioned in §12 (which depends on the exact 429 shape) does not exist in this submission.
+Low | Misleading code comments | Several files carry "STUB" / "stub — Backend Member 2 will implement" docstrings for routes that are actually fully implemented (GET /generations/:user_id, GET /admin/ai/generations). Harmless functionally, but confusing for whoever picks this up next — comments should be updated to match reality.
+Low
+Misleading code comments
+Several files carry "STUB" / "stub — Backend Member 2 will implement" docstrings for routes that are actually fully implemented (GET /generations/:user_id, GET /admin/ai/generations). Harmless functionally, but confusing for whoever picks this up next — comments should be updated to match reality.
+Low | Gemini image-generation model choice unverified | ai_provider_client.py hard-codes model "gemini-2.0-flash-exp-image-generation" and a response_modalities=["IMAGE"] config. This is a reasonable-looking guess at the free-tier image API shape, but it hasn't been run against a live key in this review (no network access) — worth a real smoke test before merging.
+Low
+Gemini image-generation model choice unverified
+ai_provider_client.py hard-codes model "gemini-2.0-flash-exp-image-generation" and a response_modalities=["IMAGE"] config. This is a reasonable-looking guess at the free-tier image API shape, but it hasn't been run against a live key in this review (no network access) — worth a real smoke test before merging.
+Low | Rate-limit vs. cache ordering | ai_service.py checks the rate limit (step 3) before the cache (step 4), which matches the doc's own §6 ordering — but it sits awkwardly next to §8's promise that "cached hits should not count against rate limits." As written, a guest who is already over quota is blocked from receiving even a free cached result. Worth flagging back to whoever owns the module spec, since the doc itself is ambiguous here — not strictly the intern's mistake.
+Low
+Rate-limit vs. cache ordering
+ai_service.py checks the rate limit (step 3) before the cache (step 4), which matches the doc's own §6 ordering — but it sits awkwardly next to §8's promise that "cached hits should not count against rate limits." As written, a guest who is already over quota is blocked from receiving even a free cached result. Worth flagging back to whoever owns the module spec, since the doc itself is ambiguous here — not strictly the intern's mistake.
+
+5. Recommended Next Steps
+Implement ai_cache_service.py for real (Mongo collection keyed by the sha256 hash already scaffolded in make_cache_key(), or Redis if available) — this is the single highest-impact gap.
+Implement ai_rate_limit_service.py for real (per-session counter for guests, per-user-per-day counter for logged-in users, using the thresholds already wired up in ai_config.py).
+Change module4_client.py to fail closed (return valid: False) on timeout/error in production, or at minimum make the fail-open behavior configurable per environment rather than hard-coded.
+Extract _upload_to_cloudinary() out of ai_service.py into the shared app/utils/cloudinary_helper.py the spec asks for, and coordinate with Modules 3/10 so nobody else builds a second copy.
+Confirm the frontend (AI Preview Panel + guest session_id handling) is being tracked separately, since it's absent from this zip despite the branch name.
+Once caching/rate limiting are real, add tests that exercise a genuine cache hit and a genuine 429, since the current 429 test only mocks the stub's return value rather than proving the counter logic itself works.
+
+Bottom line: roughly 45% of the full Module 5 spec is complete and production-ready. The backend orchestration, prompt building, and data model are genuinely strong work; caching, rate limiting, and the frontend are the remaining ~55%.

@@ -1,3 +1,14 @@
+<<<<<<< HEAD
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+venv/
+ENV/
+*.log
+=======
 # Python cache files
 __pycache__/
 *.py[cod]
@@ -15,3 +26,4 @@ venv/
 .idea/
 Thumbs.db
 Desktop.ini
+>>>>>>> origin/main

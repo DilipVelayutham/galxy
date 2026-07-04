@@ -27,7 +27,7 @@ class RatingRollupService:
             rating_avg = 0.0
         else:
             rating_sum = sum(float(r.get("rating", 0)) for r in approved_reviews)
-            rating_avg = round(rating_sum / rating_count, 2)
+            rating_avg = round(rating_sum / rating_count, 1)
             
         # Update product document in the "products" collection
         db = get_db()

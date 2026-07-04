@@ -5,17 +5,13 @@ from app.db import get_db, get_reviews_col
 from app.models.review import ReviewModel
 from app.services.rating_rollup_service import RatingRollupService
 
-# Import order_service with testing fallback
+# Import order_service (Module 8)
 try:
     from app.services.order_service import order_service
 except ImportError:
-    class MockOrderService:
-        def has_delivered_order_for_product(self, user_id, product_id):
-            # Default to True for tests/environments where Module 8 is not deployed
-            return True
-    order_service = MockOrderService()
+    order_service = None
 
-# Import image upload helper with testing fallback
+# Import image upload helper (Module 10)
 upload_image = None
 try:
     from app.utils.upload import upload_image
@@ -27,11 +23,6 @@ except ImportError:
             from app.services.cloudinary_service import upload_image
         except ImportError:
             pass
-
-if upload_image is None:
-    def upload_image(file):
-        # Fallback return string for testing
-        return f"https://res.cloudinary.com/mock/image/upload/{file.filename}"
 
 
 class ReviewService:
@@ -48,8 +39,33 @@ class ReviewService:
         Submits a new review for a product.
         Verifies purchase history, duplicate submissions, and stores pending review.
         """
+        # Check order_service integration
+        if order_service is None:
+            return {
+                "success": False,
+                "message": "Order Service (Module 8) integration error: Service is currently unavailable.",
+                "errors": {}
+            }, 500
+
+        # Check upload_image integration if there are images
+        if images and upload_image is None:
+            return {
+                "success": False,
+                "message": "Image Upload Service (Module 10) integration error: Cloudinary helper is currently unavailable.",
+                "errors": {}
+            }, 500
+
         # 1. Verify that user has purchased and received the product (using order_service)
-        if not order_service.has_delivered_order_for_product(user_id, product_id):
+        try:
+            has_purchased = order_service.has_delivered_order_for_product(user_id, product_id)
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Order Service integration call error: {str(e)}",
+                "errors": {}
+            }, 500
+
+        if not has_purchased:
             return {
                 "success": False,
                 "message": "Product has not been purchased and delivered.",

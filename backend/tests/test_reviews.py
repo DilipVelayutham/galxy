@@ -14,6 +14,15 @@ Config.FLASK_ENV = "testing"
 Config.MONGO_URI = "mongomock://localhost"
 Config.DB_NAME = "test_reviews_db"
 
+class MockOrderService:
+    def __init__(self, eligible=True):
+        self.eligible = eligible
+        
+    def has_delivered_order_for_product(self, user_id, product_id):
+        if self.eligible is Exception:
+            raise Exception("Connection timeout to order database.")
+        return self.eligible
+
 @pytest.fixture
 def app():
     # Re-initialize application for tests
@@ -34,6 +43,14 @@ def db(app):
     db_inst["testimonials"].delete_many({})
     db_inst["users"].delete_many({})
     yield db_inst
+
+@pytest.fixture(autouse=True)
+def mock_dependencies(monkeypatch):
+    """Automatically mocks external services for all tests."""
+    import app.services.review_service as rs
+    # Default mocks to ensure successful path executions
+    monkeypatch.setattr(rs, "order_service", MockOrderService(eligible=True))
+    monkeypatch.setattr(rs, "upload_image", lambda file: f"https://res.cloudinary.com/mock/image/upload/test.jpg")
 
 # Helpers to generate JWT token
 def generate_token(user_id="user_123", role="customer", name="John Doe", email="john@example.com"):
@@ -88,9 +105,8 @@ def test_submit_review_validation(client, db):
     assert "between 1 and 5" in data["errors"]["rating"]
 
 def test_submit_review_not_eligible(client, db, monkeypatch):
-    # Mock order_service to return False
-    from app.services.review_service import order_service
-    monkeypatch.setattr(order_service, "has_delivered_order_for_product", lambda u, p: False)
+    import app.services.review_service as rs
+    monkeypatch.setattr(rs, "order_service", MockOrderService(eligible=False))
 
     headers = get_auth_headers(user_id="user_unauth")
     prod_id = str(ObjectId())
@@ -107,11 +123,7 @@ def test_submit_review_not_eligible(client, db, monkeypatch):
     assert data["success"] is False
     assert "purchased and delivered" in data["message"]
 
-def test_submit_review_success_and_duplicate(client, db, monkeypatch):
-    # Mock order_service to return True
-    from app.services.review_service import order_service
-    monkeypatch.setattr(order_service, "has_delivered_order_for_product", lambda u, p: True)
-
+def test_submit_review_success_and_duplicate(client, db):
     headers = get_auth_headers(user_id="user_buyer", name="Jane Buyer")
     prod_id = str(ObjectId())
     
@@ -152,6 +164,64 @@ def test_submit_review_success_and_duplicate(client, db, monkeypatch):
     review_payload_diff["order_id"] = "ord_buyer_2"
     response_diff = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json=review_payload_diff)
     assert response_diff.status_code == 201
+
+def test_submit_review_integration_missing_order_service(client, db, monkeypatch):
+    import app.services.review_service as rs
+    monkeypatch.setattr(rs, "order_service", None)
+
+    headers = get_auth_headers()
+    prod_id = str(ObjectId())
+    
+    response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
+        "order_id": "ord_missing",
+        "order_number": "ON-MISSING",
+        "rating": 5,
+        "comment": "Nice product"
+    })
+    
+    assert response.status_code == 500
+    data = json.loads(response.data)
+    assert data["success"] is False
+    assert "integration error" in data["message"].lower()
+
+def test_submit_review_integration_order_service_throws(client, db, monkeypatch):
+    import app.services.review_service as rs
+    monkeypatch.setattr(rs, "order_service", MockOrderService(eligible=Exception))
+
+    headers = get_auth_headers()
+    prod_id = str(ObjectId())
+    
+    response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
+        "order_id": "ord_throws",
+        "order_number": "ON-THROWS",
+        "rating": 5,
+        "comment": "Nice product"
+    })
+    
+    assert response.status_code == 500
+    data = json.loads(response.data)
+    assert data["success"] is False
+    assert "integration call error" in data["message"].lower()
+
+def test_submit_review_integration_missing_cloudinary(client, db, monkeypatch):
+    import app.services.review_service as rs
+    monkeypatch.setattr(rs, "upload_image", None)
+
+    headers = get_auth_headers()
+    prod_id = str(ObjectId())
+    
+    response = client.post(f"/api/products/{prod_id}/reviews", headers=headers, json={
+        "order_id": "ord_img_err",
+        "order_number": "ON-IMG-ERR",
+        "rating": 5,
+        "comment": "Nice product",
+        "images": ["file1.jpg"]
+    })
+    
+    assert response.status_code == 500
+    data = json.loads(response.data)
+    assert data["success"] is False
+    assert "Cloudinary helper is currently unavailable" in data["message"]
 
 def test_public_reviews_api(client, db):
     prod_id = ObjectId()

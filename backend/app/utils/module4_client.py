@@ -71,15 +71,22 @@ def _http_validate(category: dict, selected_attributes: dict) -> dict:
         }
     except http_requests.Timeout:
         logger.error(
-            "[module4_client] Timeout calling Module 4 validation endpoint."
+            "[module4_client] Timeout calling Module 4 validation endpoint. Failing closed."
         )
-        # Fail-open in dev, fail-closed in production — here we fail open for now.
-        return {"valid": True, "errors": [], "message": "(Module 4 timeout — fallback)"}
+        return {
+            "valid": False,
+            "errors": ["Validation service timeout"],
+            "message": "Attribute validation is temporarily unavailable due to a timeout. Please try again.",
+        }
     except Exception as exc:
         logger.error(
-            "[module4_client] Error calling Module 4: %s. Using fallback.", exc
+            "[module4_client] Error calling Module 4: %s. Failing closed.", exc
         )
-        return {"valid": True, "errors": [], "message": "(Module 4 unavailable — fallback)"}
+        return {
+            "valid": False,
+            "errors": ["Validation service offline"],
+            "message": "Attribute validation is temporarily unavailable. Please try again later.",
+        }
 
 
 def _local_validate(category: dict, selected_attributes: dict) -> dict:

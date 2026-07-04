@@ -119,7 +119,7 @@ class TestGeneratePreviewRoute:
              patch("app.services.ai_cache_service.check_cache", return_value=None), \
              patch("app.services.ai_provider_client.generate_image",
                    return_value=b"fake_image_bytes"), \
-             patch("app.services.ai_service._upload_to_cloudinary",
+             patch("app.services.ai_service.upload_preview_image",
                    return_value="https://res.cloudinary.com/galxy/ai-previews/gen.jpg"), \
              patch("app.models.ai_generation.insert_generation", return_value="gen123"), \
              patch("app.services.ai_cache_service.store_cache"), \

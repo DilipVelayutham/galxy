@@ -1,21 +1,19 @@
 """
-ai_rate_limit_service.py — Module 5 AI Preview Generation (T4 — Backend Member 2)
+ai_rate_limit_service.py — Module 5 AI Preview Generation
 Two-tier rate limiting: guest (session_id) + logged-in user (daily cap).
 
-OWNER: Gokul B (Backend Member 2, feat-m5-t3-rate-limiting)
-This file is a stub interface contract from Backend Member 1's perspective.
-Backend Member 2 will provide the full implementation in their branch.
-
-Interface contract (frozen from Day 1 per spec §12):
-  check_rate_limit(session_id, user_id) → RateLimitResult
-
-Per spec §8:
-  - Guest (session_id): AI_FREE_GENERATIONS_PER_SESSION total across all time.
-  - Logged-in (user_id): AI_MAX_GENERATIONS_PER_USER_PER_DAY, resets daily.
-  - Cached hits do NOT count against limits (only new provider calls).
+Counts successful, genuine (non-cached) provider generations directly from
+the MongoDB 'ai_generations' collection to verify usage quotas.
 """
 import logging
+from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
+from bson import ObjectId
+from app.db import get_db
+from app.configs.ai_config import (
+    AI_FREE_GENERATIONS_PER_SESSION,
+    AI_MAX_GENERATIONS_PER_USER_PER_DAY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +26,13 @@ class RateLimitResult:
     """
     allowed: bool
     limit_reached: bool
-    limit_scope: str   # "guest" | "user" | ""   (empty when allowed)
+    limit_scope: str   # "guest" | "user" | ""
     message: str       # human-readable message for the frontend upsell UI
+
+
+def _get_generations_collection():
+    """Return the ai_generations collection from MongoDB."""
+    return get_db()["ai_generations"]
 
 
 def check_rate_limit(session_id: str, user_id: str | None) -> RateLimitResult:
@@ -37,24 +40,98 @@ def check_rate_limit(session_id: str, user_id: str | None) -> RateLimitResult:
     Check whether this session/user may trigger a new AI generation.
 
     Per spec §8: cached hits should NOT call this function — only new
-    provider calls consume quota. The caller (ai_service.py) is responsible
-    for calling check_cache() first, and only calling check_rate_limit()
-    when a genuine new generation will occur.
+    provider calls consume quota.
 
-    Args:
-        session_id: always present (guest UUID or logged-in user's session).
-        user_id: string ObjectId if logged in, None if guest.
-
-    Returns:
-        RateLimitResult with .allowed == True if generation may proceed.
+    Quotas:
+      - Guest (session_id): AI_FREE_GENERATIONS_PER_SESSION total across all time.
+      - Logged-in (user_id): AI_MAX_GENERATIONS_PER_USER_PER_DAY per UTC calendar day.
     """
-    # STUB — Backend Member 2 will implement with MongoDB counters.
-    # For now, always allow so Backend Member 1's orchestration can be tested.
-    logger.debug(
-        "[rate_limit] check called session=%s user=%s (stub — always allows)",
-        session_id,
-        user_id,
-    )
+    col = _get_generations_collection()
+
+    # 1. Logged-in user limit check (Daily)
+    if user_id:
+        try:
+            user_oid = ObjectId(user_id)
+        except Exception:
+            logger.warning("[rate_limit] Invalid user_id '%s'", user_id)
+            return RateLimitResult(
+                allowed=False,
+                limit_reached=True,
+                limit_scope="user",
+                message="Invalid user identification. Please log in again.",
+            )
+
+        # Count successful user generations since midnight UTC of current day
+        now = datetime.now(timezone.utc)
+        midnight_utc = datetime(
+            now.year, now.month, now.day, tzinfo=timezone.utc
+        )
+
+        query = {
+            "user_id": user_oid,
+            "status": "success",
+            "prompt_used": {"$ne": "(served from cache)"},
+            "created_at": {"$gte": midnight_utc},
+        }
+        try:
+            count = col.count_documents(query)
+            if count >= AI_MAX_GENERATIONS_PER_USER_PER_DAY:
+                logger.info(
+                    "[rate_limit] User %s hit limit: %d/%d",
+                    user_id,
+                    count,
+                    AI_MAX_GENERATIONS_PER_USER_PER_DAY,
+                )
+                return RateLimitResult(
+                    allowed=False,
+                    limit_reached=True,
+                    limit_scope="user",
+                    message=(
+                        f"You have reached the limit of {AI_MAX_GENERATIONS_PER_USER_PER_DAY} "
+                        "previews per day. Please try again tomorrow."
+                    ),
+                )
+            logger.debug(
+                "[rate_limit] User %s count: %d/%d",
+                user_id,
+                count,
+                AI_MAX_GENERATIONS_PER_USER_PER_DAY,
+            )
+        except Exception as exc:
+            logger.error("[rate_limit] DB error during user count: %s", exc)
+
+    # 2. Guest limit check (Lifetime per session_id)
+    else:
+        query = {
+            "session_id": session_id,
+            "user_id": None,
+            "status": "success",
+            "prompt_used": {"$ne": "(served from cache)"},
+        }
+        try:
+            count = col.count_documents(query)
+            if count >= AI_FREE_GENERATIONS_PER_SESSION:
+                logger.info(
+                    "[rate_limit] Guest session %s hit limit: %d/%d",
+                    session_id,
+                    count,
+                    AI_FREE_GENERATIONS_PER_SESSION,
+                )
+                return RateLimitResult(
+                    allowed=False,
+                    limit_reached=True,
+                    limit_scope="guest",
+                    message="Sign up to keep designing",
+                )
+            logger.debug(
+                "[rate_limit] Guest session %s count: %d/%d",
+                session_id,
+                count,
+                AI_FREE_GENERATIONS_PER_SESSION,
+            )
+        except Exception as exc:
+            logger.error("[rate_limit] DB error during guest count: %s", exc)
+
     return RateLimitResult(
         allowed=True,
         limit_reached=False,
@@ -65,13 +142,8 @@ def check_rate_limit(session_id: str, user_id: str | None) -> RateLimitResult:
 
 def increment_usage(session_id: str, user_id: str | None) -> None:
     """
-    Increment the usage counter for this session/user after a successful
-    (non-cached) generation.
-
-    STUB — Backend Member 2 will implement.
+    Since usage is calculated dynamically by counting entries in the
+    'ai_generations' collection, we do not need to keep separate state counters.
+    This function is kept for backward compatibility and is a clean no-op.
     """
-    logger.debug(
-        "[rate_limit] increment_usage called session=%s user=%s (stub — no-op)",
-        session_id,
-        user_id,
-    )
+    pass

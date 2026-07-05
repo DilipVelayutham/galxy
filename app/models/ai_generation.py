@@ -31,8 +31,17 @@ class AIGeneration:
         error_message,
         generation_time_ms
     ):
+        def _to_object_id(val):
+            """Safely convert val to ObjectId if it is a valid 24-char hex string."""
+            if not val:
+                return None
+            try:
+                return ObjectId(val)
+            except Exception:
+                return val  # Store as plain string if not a valid ObjectId
+
         record = {
-            "user_id": ObjectId(user_id) if user_id else None,
+            "user_id": _to_object_id(user_id),
             "session_id": session_id,
             "category_id": ObjectId(category_id) if category_id else None,
             "product_id": ObjectId(product_id) if product_id else None,

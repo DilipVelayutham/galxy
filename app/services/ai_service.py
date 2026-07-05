@@ -17,7 +17,7 @@ def orchestrate_generation(category_id, product_id, selected_attributes, session
     # 1. Fetch category from DB
     try:
         cat_obj_id = ObjectId(category_id)
-    except Exception:
+    except Exception as exc:
         return {
             "success": False,
             "status_code": 400,

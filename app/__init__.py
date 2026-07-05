@@ -12,7 +12,10 @@ db = None
 
 def create_app(config_class=AIConfig):
     global db
-    app = Flask(__name__)
+    import os
+    # Serve /static/* from the project root's static/ folder, not app/static/
+    root_static = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static')
+    app = Flask(__name__, static_folder=root_static, static_url_path='/static')
     app.config.from_object(config_class)
     
     # Initialize MongoDB Client

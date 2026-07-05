@@ -3,7 +3,7 @@ import AIPreviewPanel from './components/AIPreviewPanel';
 
 // Category schema definition from Module 2 (Mock data)
 const CATEGORY_SCHEMA = {
-  id: "cat_neon_signs_101",
+  id: "66851234af504e44a4b8c771",
   name: "Neon Sign",
   attributes: [
     { key: "custom_text", label: "Custom Neon Text", type: "text", affects_ai_preview: true, default_value: "Dream Big" },
@@ -48,7 +48,7 @@ export default function App() {
           <AIPreviewPanel
             category={CATEGORY_SCHEMA}
             selectedAttributes={selectedAttributes}
-            user={isLoggedIn ? { id: 'usr_123', name: 'Sawthi' } : null}
+            user={isLoggedIn ? { id: '66851234af504e44a4b8c999', name: 'Sawthi' } : null}
             defaultProductImage="assets/neon_default.png"
           />
         </div>

@@ -9,8 +9,8 @@ class AIConfig:
     AI_GENERATION_TIMEOUT_SECONDS = int(os.getenv("AI_GENERATION_TIMEOUT_SECONDS", "30"))
     
     # Quota & Rate Limiting Configurations (for integration with Gokul's task)
-    AI_FREE_GENERATIONS_PER_SESSION = int(os.getenv("AI_FREE_GENERATIONS_PER_SESSION", "5"))
-    AI_MAX_GENERATIONS_PER_USER_PER_DAY = int(os.getenv("AI_MAX_GENERATIONS_PER_USER_PER_DAY", "20"))
+    AI_FREE_GENERATIONS_PER_SESSION = int(os.getenv("AI_FREE_GENERATIONS_PER_SESSION", "100"))
+    AI_MAX_GENERATIONS_PER_USER_PER_DAY = int(os.getenv("AI_MAX_GENERATIONS_PER_USER_PER_DAY", "100"))
     
     # Cloudinary Configuration
     CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "")

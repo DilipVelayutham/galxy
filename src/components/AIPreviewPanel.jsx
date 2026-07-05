@@ -120,11 +120,18 @@ export default function AIPreviewPanel({
       sanitizedAttributes.custom_text = sanitizeCustomText(sanitizedAttributes.custom_text);
     }
 
+    let guestSessionId = localStorage.getItem('galaxy_guest_session_id');
+    if (!guestSessionId || guestSessionId === 'null' || guestSessionId === 'undefined') {
+      guestSessionId = 'guest_' + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('galaxy_guest_session_id', guestSessionId);
+    }
+
     const requestBody = {
       category_id: category?.id || '',
       product_id: null, // Custom configured item
       selected_attributes: sanitizedAttributes,
-      session_id: user ? null : (localStorage.getItem('galaxy_guest_session_id') || '')
+      session_id: user ? null : guestSessionId,
+      user_id: user ? user.id : null
     };
 
     try {

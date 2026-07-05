@@ -54,7 +54,7 @@ def generate_preview():
         }), 400
         
     user_id = getattr(g, "user_id", None)
-    
+
     # 2. Check that guest session ID is present if not logged in
     if not user_id and not session_id:
         return jsonify({

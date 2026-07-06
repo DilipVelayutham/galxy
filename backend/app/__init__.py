@@ -51,6 +51,9 @@ def create_app(test_config=None):
             
     # Register blueprints
     from backend.app.routes.user_routes import user_bp
+    from backend.app.routes.admin_auth_routes import admin_auth_bp
+
     app.register_blueprint(user_bp)
+    app.register_blueprint(admin_auth_bp)
     
     return app

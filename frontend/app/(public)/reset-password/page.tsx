@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
 import React, { useState, FormEvent, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { validatePassword } from '../../../../lib/validators';
+import { validatePassword } from '../../../lib/validators';
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();

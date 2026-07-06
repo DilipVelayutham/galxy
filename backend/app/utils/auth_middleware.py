@@ -1,68 +1,96 @@
-# ==============================================================================
-# LOCAL-TESTING STUB ONLY (NOT A DELIVERABLE)
-# ==============================================================================
-# This is a temporary development/testing mock implementation of the authentication
-# middleware. This file is NOT owned by Module 1 (Auth Accounts) and must be
-# deleted and replaced by Module 1's main integrated app (owned by in1) at merge time.
-# ==============================================================================
-
-import jwt
+import functools
 from flask import request, jsonify
-from functools import wraps
+from backend.app.utils.token_helper import (
+    decode_token,
+    ExpiredTokenError,
+    InvalidTokenError,
+)
+from backend.app.db import get_db
 from bson import ObjectId
-import os
 
 def require_auth(f):
-    """
-    Decorator to protect routes requiring customer authentication.
-    Decodes the JWT token from the Authorization header, verifies permissions,
-    and attaches request.user.
-    """
-    @wraps(f)
+    @functools.wraps(f)
     def decorated(*args, **kwargs):
-        # Retrieve secret from environment variable
-        jwt_secret = os.getenv("JWT_SECRET", "default_jwt_secret_for_development")
-        
         auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            return jsonify({"success": False, "message": "Missing Authorization header."}), 401
-            
-        parts = auth_header.split()
-        if len(parts) != 2 or parts[0].lower() != "bearer":
-            return jsonify({"success": False, "message": "Invalid Authorization header format. Use: Bearer <token>."}), 401
-            
-        token = parts[1]
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"success": False, "message": "Missing or invalid authorization header"}), 401
+        
+        token = auth_header.split(" ")[1]
         try:
-            # Decode the access token
-            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
-            user_id = payload.get("sub")
-            role = payload.get("role", "customer")
-            
+            payload = decode_token(token)
+            role = payload.get("role")
             if role != "customer":
-                return jsonify({"success": False, "message": "Access denied. Customer privileges required."}), 403
-                
-            from backend.app import db
-            try:
-                user_oid = ObjectId(user_id)
-            except Exception:
-                return jsonify({"success": False, "message": "Invalid user ID format in token."}), 401
-                
-            user = db.users.find_one({"_id": user_oid})
-            if not user:
-                return jsonify({"success": False, "message": "User not found."}), 401
-                
-            if not user.get("is_active", True):
-                return jsonify({"success": False, "message": "Account has been deactivated."}), 403
-                
-            # Attach user to Flask request context
-            request.user = user
+                return jsonify({"success": False, "message": "Access denied. Customers only."}), 403
             
-        except jwt.ExpiredSignatureError:
-            return jsonify({"success": False, "message": "Access token has expired."}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({"success": False, "message": "Invalid token."}), 401
+            user_id = payload.get("sub")
+            db = get_db()
+            user = db.users.find_one({"_id": ObjectId(user_id)})
+            if not user:
+                return jsonify({"success": False, "message": "User not found"}), 401
+            if not user.get("is_active", True):
+                return jsonify({"success": False, "message": "Account deactivated"}), 403
+            
+            # Attach to request context
+            request.user = user
+            return f(*args, **kwargs)
+        except ExpiredTokenError:
+            return jsonify({"success": False, "message": "Token has expired"}), 401
+        except InvalidTokenError:
+            return jsonify({"success": False, "message": "Invalid token"}), 401
         except Exception as e:
             return jsonify({"success": False, "message": f"Authentication failed: {str(e)}"}), 401
+    return decorated
+
+def require_admin(f):
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"success": False, "message": "Missing or invalid authorization header"}), 401
+        
+        token = auth_header.split(" ")[1]
+        try:
+            payload = decode_token(token)
+            role = payload.get("role")
+            if role != "super_admin":
+                return jsonify({"success": False, "message": "Access denied. Admins only."}), 403
             
+            admin_id = payload.get("sub")
+            db = get_db()
+            admin = db.admin_users.find_one({"_id": ObjectId(admin_id)})
+            if not admin:
+                return jsonify({"success": False, "message": "Admin not found"}), 401
+            if not admin.get("is_active", True):
+                return jsonify({"success": False, "message": "Account deactivated"}), 403
+            
+            # Attach to request context
+            request.admin = admin
+            return f(*args, **kwargs)
+        except ExpiredTokenError:
+            return jsonify({"success": False, "message": "Token has expired"}), 401
+        except InvalidTokenError:
+            return jsonify({"success": False, "message": "Invalid token"}), 401
+        except Exception as e:
+            return jsonify({"success": False, "message": f"Authentication failed: {str(e)}"}), 401
+    return decorated
+
+def optional_auth(f):
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        request.user = None
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+            try:
+                payload = decode_token(token)
+                role = payload.get("role")
+                if role == "customer":
+                    user_id = payload.get("sub")
+                    db = get_db()
+                    user = db.users.find_one({"_id": ObjectId(user_id)})
+                    if user and user.get("is_active", True):
+                        request.user = user
+            except Exception:
+                pass
         return f(*args, **kwargs)
     return decorated

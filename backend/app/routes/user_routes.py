@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+
 from backend.app.utils.auth_middleware import require_auth
 from backend.app.services import user_service, address_service
 from backend.app.models.address import ValidationError

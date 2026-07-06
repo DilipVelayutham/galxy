@@ -1,29 +1,22 @@
 import bcrypt
 
-def hash_password(plain_password: str) -> str:
+def hash_password(password: str) -> str:
     """
-    Hashes a plain text password using bcrypt with a cost factor of 12.
+    Hashes a password using bcrypt with a cost factor of 12.
     """
-    if not plain_password:
+    if not password:
         raise ValueError("Password cannot be empty")
-        
-    password_bytes = plain_password.encode('utf-8')
-    # Generate a salt with work factor 12
     salt = bcrypt.gensalt(rounds=12)
-    hashed_bytes = bcrypt.hashpw(password_bytes, salt)
-    return hashed_bytes.decode('utf-8')
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
-def verify_password(plain_password: str, password_hash: str) -> bool:
+def verify_password(password: str, hashed_password: str) -> bool:
     """
-    Verifies a plain text password against a bcrypt hash in constant time.
+    Verifies a plaintext password against a bcrypt hash.
     """
-    if not plain_password or not password_hash:
+    if not password or not hashed_password:
         return False
-        
     try:
-        password_bytes = plain_password.encode('utf-8')
-        hash_bytes = password_hash.encode('utf-8')
-        return bcrypt.checkpw(password_bytes, hash_bytes)
+        return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
     except Exception:
-        # Prevent any potential timing/decoding exceptions from exposing logic
         return False

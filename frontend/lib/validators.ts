@@ -14,7 +14,6 @@ export function validateEmail(email: string): ValidationResult {
     return { isValid: false, error: "Email is required" };
   }
   const cleanEmail = email.trim();
-  // Standard RFC 5322 regex matching backend
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(cleanEmail)) {
     return { isValid: false, error: "Invalid email format" };
@@ -43,7 +42,6 @@ export function validatePhone(phone: string): ValidationResult {
     return { isValid: false, error: "Phone number is required" };
   }
   const cleanPhone = phone.trim();
-  // 10-digit Indian mobile format (starts with 6, 7, 8, or 9)
   const phoneRegex = /^[6-9]\d{9}$/;
   if (!phoneRegex.test(cleanPhone)) {
     return { isValid: false, error: "Phone number must be a valid 10-digit Indian mobile number" };
@@ -56,7 +54,6 @@ export function validatePincode(pincode: string): ValidationResult {
     return { isValid: false, error: "Pincode is required" };
   }
   const cleanPincode = pincode.trim();
-  // 6-digit numeric pincode
   const pincodeRegex = /^\d{6}$/;
   if (!pincodeRegex.test(cleanPincode)) {
     return { isValid: false, error: "Pincode must be exactly 6 digits" };

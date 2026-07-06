@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
 import React, { useState, FormEvent } from 'react';
 import Link from 'next/link';
-import { validateEmail } from '../../../../lib/validators';
+import { validateEmail } from '../../../lib/validators';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -17,7 +17,7 @@ export default function ForgotPasswordPage() {
     // 1. Client-side validation
     const validation = validateEmail(email);
     if (!validation.isValid) {
-      setError(validation.error);
+      setError(validation.error || 'Invalid email format');
       return;
     }
 

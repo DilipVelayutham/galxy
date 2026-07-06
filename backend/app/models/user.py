@@ -81,5 +81,6 @@ def to_public_dict(user):
         "is_verified": user.get('is_verified', False),
         "is_active": user.get('is_active', True),
         "created_at": user.get('created_at').isoformat() if isinstance(user.get('created_at'), datetime) else user.get('created_at'),
-        "updated_at": user.get('updated_at').isoformat() if isinstance(user.get('updated_at'), datetime) else user.get('updated_at')
+        "updated_at": user.get('updated_at').isoformat() if isinstance(user.get('updated_at'), datetime) else user.get('updated_at'),
+        "last_login": user.get('last_login').isoformat() if isinstance(user.get('last_login'), datetime) else user.get('last_login')
     }

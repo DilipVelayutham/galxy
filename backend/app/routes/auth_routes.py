@@ -1,6 +1,8 @@
 import os
 from flask import Blueprint, request, jsonify, make_response
-from app.services.auth_service import AuthService, AuthServiceError
+
+from backend.app.services.auth_service import AuthService, AuthServiceError
+from backend.app.utils.rate_limiter import rate_limit_forgot_password
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -70,7 +72,7 @@ def login():
     # Rate limiting on IP + Email combo
     ip_addr = request.remote_addr or "unknown_ip"
     rate_key = f"{ip_addr}+{email.strip().lower()}"
-    from app.utils.rate_limiter import login_limiter
+    from backend.app.utils.rate_limiter import login_limiter
     if login_limiter.is_rate_limited(rate_key):
         return jsonify({
             "success": False,
@@ -143,6 +145,7 @@ def refresh():
         return response, 500
 
 @auth_bp.route('/forgot-password', methods=['POST'])
+@rate_limit_forgot_password
 def forgot_password():
     """
     POST /api/auth/forgot-password
@@ -200,10 +203,11 @@ def reset_password():
     result = AuthService.reset_password(token, new_password)
     
     if not result["success"]:
+        error_field = result.get("error_field", "new_password")
         return jsonify({
             "success": False,
             "message": result["message"],
-            "errors": {"new_password": result["message"]}
+            "errors": {error_field: result["message"]}
         }), 400
         
     return jsonify({

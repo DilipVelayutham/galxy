@@ -1,10 +1,11 @@
 from flask import Blueprint, request, jsonify
-from app.utils.auth_middleware import require_auth
-from app.services import user_service, address_service
-from app.models.address import ValidationError
-from app.models.user import User
 
-user_bp = Blueprint('user', __name__)
+from backend.app.utils.auth_middleware import require_auth
+from backend.app.services import user_service, address_service
+from backend.app.models.address import ValidationError
+from backend.app.models.user import to_public_dict
+
+user_bp = Blueprint('user', __name__, url_prefix='/api/user')
 
 @user_bp.route('/profile', methods=['GET'])
 @require_auth
@@ -13,11 +14,17 @@ def get_profile():
     GET /api/user/profile
     Returns name, email, phone, and addresses list of the authenticated user.
     """
-    profile = User.to_public_dict(request.user)
+    profile = to_public_dict(request.user)
+    trimmed_profile = {
+        "name": profile.get("name"),
+        "email": profile.get("email"),
+        "phone": profile.get("phone"),
+        "addresses": profile.get("addresses")
+    }
     return jsonify({
         "success": True,
         "message": "Profile retrieved successfully.",
-        "data": profile
+        "data": trimmed_profile
     }), 200
 
 @user_bp.route('/profile', methods=['PUT'])
@@ -30,10 +37,17 @@ def update_profile():
     data = request.get_json() or {}
     try:
         updated_user = user_service.update_profile(request.user['_id'], data)
+        profile = to_public_dict(updated_user)
+        trimmed_profile = {
+            "name": profile.get("name"),
+            "email": profile.get("email"),
+            "phone": profile.get("phone"),
+            "addresses": profile.get("addresses")
+        }
         return jsonify({
             "success": True,
             "message": "Profile updated successfully.",
-            "data": User.to_public_dict(updated_user)
+            "data": trimmed_profile
         }), 200
     except ValidationError as e:
         return jsonify({
@@ -57,6 +71,7 @@ def add_address():
     data = request.get_json() or {}
     try:
         new_address = address_service.add_address(request.user['_id'], data)
+        # Convert ObjectId in address response to string
         new_address['_id'] = str(new_address['_id'])
         return jsonify({
             "success": True,
@@ -85,6 +100,7 @@ def update_address(address_id):
     data = request.get_json() or {}
     try:
         updated_addr = address_service.update_address(request.user['_id'], address_id, data)
+        # Convert ObjectId in address response to string
         updated_addr['_id'] = str(updated_addr['_id'])
         return jsonify({
             "success": True,

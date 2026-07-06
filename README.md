@@ -1,44 +1,64 @@
-# GALXY - Module 1
+# GALXY - Module 1: Auth & User Accounts
 
-## Team Members & Branches
+## Branch
+`dev`
 
-### Dilip Velayutham (Team Lead | Auth Architect | Integration Lead)
-- Branch: `in1-dilip`
-- Responsibilities:
-  - Authentication (Signup, Login, Logout)
-  - JWT & Refresh Token
-  - Auth Middleware
-  - Token Helper
-  - Module Architecture
-  - Integration & Code Review
-  - Frontend: AuthContext, AuthGuard, AuthForm, Signup Page, Login Page, Session Management
+## Purpose
 
-### Naresh Kumar (Profile & Address Developer)
-- Branch: `in2-naresh`
-- Responsibilities:
-  - User Profile, Address CRUD
-  - User Service, Address Service
-  - User Model
-  - Frontend: Profile Page, Address Page, AddressCard, AddressForm
+This is the **integration branch** for Module 1.
 
-### Tharani Jayaprakash (Security & Password Recovery Developer)
-- Branch: `in3-tharani`
-- Responsibilities:
-  - Password Helper, Validators
-  - Forgot Password, Reset Password
-  - SMTP Integration
-  - Frontend: Forgot Password Page, Reset Password Page, Shared Validators Module
+All completed work from individual intern branches must be merged into this branch after review by the Team Lead.
 
-### Arun Kumar (Backend Developer — Admin Identity, Testing & Documentation)
-- Branch: `in4-arun`
-- Responsibilities:
-  - Admin Authentication, Admin Routes, Admin Service
-  - Module Testing, Module Documentation
-  - Frontend: Admin Login Page, Frontend Testing, Role Isolation Validation
+---
+
+## Team
+
+| Intern | Branch | Responsibility |
+|---------|--------|----------------|
+| Dilip Velayutham (TL) | in1-dilip | Authentication Core & Integration |
+| Naresh Kumar | in2-naresh | User Profile & Address Management |
+| Tharani Jayaprakash | in3-tharani | Password Recovery & Validation |
+| Arun Kumar | in4-arun | Admin Authentication & Testing |
+
+---
 
 ## Workflow
-Develop → Commit → Test → Pull Request to `dev`
 
-Ensure complete separation between customer and admin authentication.
-**Do not modify files owned by other members.**
+```
+Individual Branch
+        ↓
+Pull Request
+        ↓
+Team Lead Review
+        ↓
+Merge into dev
+        ↓
+Module Testing
+        ↓
+Merge into main
+```
 
+---
+
+## Rules
+
+- ❌ Never develop directly on `dev`
+- ❌ Never force push
+- ✅ Merge only after review
+- ✅ Keep `dev` stable
+
+---
+
+## Module Status
+
+- [ ] Authentication
+- [ ] Profile
+- [ ] Address
+- [ ] Password Reset
+- [ ] Admin Authentication
+- [ ] Testing
+- [ ] Documentation
+
+---
+
+**Maintained by:** Dilip Velayutham (Team Lead)

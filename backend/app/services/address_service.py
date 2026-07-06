@@ -1,5 +1,5 @@
 from bson import ObjectId
-from app.models.address import validate_address_data, ValidationError
+from backend.app.models.address import validate_address_data, ValidationError
 
 def add_address(user_id, data):
     """
@@ -7,7 +7,7 @@ def add_address(user_id, data):
     If it is the user's first address, forces is_default to True.
     If is_default is set to True, unsets it on all other addresses.
     """
-    from app import db
+    from backend.app import db
     try:
         user_oid = ObjectId(user_id) if isinstance(user_id, str) else user_id
     except Exception:
@@ -43,7 +43,7 @@ def update_address(user_id, address_id, data):
     If is_default is set to True, unsets it on all other addresses.
     If is_default is set to False on the default address, selects another address to make default.
     """
-    from app import db
+    from backend.app import db
     try:
         user_oid = ObjectId(user_id) if isinstance(user_id, str) else user_id
         addr_oid = ObjectId(address_id) if isinstance(address_id, str) else address_id
@@ -69,9 +69,11 @@ def update_address(user_id, address_id, data):
         raise ValidationError({"message": "Address not found."})
         
     if validated.get('is_default', False):
-        # Set is_default to False for all other addresses
-        for addr in addresses:
-            addr['is_default'] = (addr['_id'] == addr_oid)
+        # Delegate default-setting to set_default helper
+        set_default(user_oid, addr_oid)
+        user = db.users.find_one({"_id": user_oid})
+        addresses = user.get('addresses', [])
+        target_addr = next(a for a in addresses if a['_id'] == addr_oid)
     elif 'is_default' in validated and not validated.get('is_default', False):
         # If client wants to set is_default to False on the current default address
         if target_addr.get('is_default', False):
@@ -80,9 +82,11 @@ def update_address(user_id, address_id, data):
                 # If it's the only address, it must stay default
                 validated['is_default'] = True
             else:
-                # Set first other address as default
-                other_addresses[0]['is_default'] = True
-                target_addr['is_default'] = False
+                # Delegate default-setting for first other address to set_default helper
+                set_default(user_oid, other_addresses[0]['_id'])
+                user = db.users.find_one({"_id": user_oid})
+                addresses = user.get('addresses', [])
+                target_addr = next(a for a in addresses if a['_id'] == addr_oid)
                 
     # Apply updates
     for key, value in validated.items():
@@ -101,7 +105,7 @@ def delete_address(user_id, address_id):
     Blocks deleting default address if there's a pending order.
     If deleting default address and no pending order, makes another address default.
     """
-    from app import db
+    from backend.app import db
     try:
         user_oid = ObjectId(user_id) if isinstance(user_id, str) else user_id
         addr_oid = ObjectId(address_id) if isinstance(address_id, str) else address_id
@@ -153,7 +157,7 @@ def set_default(user_id, address_id):
     """
     Sets the specified address as default, unsetting all others.
     """
-    from app import db
+    from backend.app import db
     try:
         user_oid = ObjectId(user_id) if isinstance(user_id, str) else user_id
         addr_oid = ObjectId(address_id) if isinstance(address_id, str) else address_id

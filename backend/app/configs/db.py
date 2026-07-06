@@ -1,3 +1,4 @@
+# TEMP: local dev only, replace with in1's shared db module at merge to avoid duplicate clients
 import os
 from pymongo import MongoClient
 from dotenv import load_dotenv

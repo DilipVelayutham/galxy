@@ -77,9 +77,11 @@ Desktop.ini
 
 service-account.json
 cloudinary_credentials.json
+MongoDB Credentials.txt
 
 # ---------- Uploads ----------
 uploads/
 
 # ---------- Cache ----------
 .cache/
+MongoDB Credentials.txt

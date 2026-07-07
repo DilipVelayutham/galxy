@@ -1,7 +1,7 @@
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
-from backend.app.models.address import ValidationError
+from app.models.address import ValidationError
 
 def validate_phone(phone):
     if not phone:
@@ -84,3 +84,32 @@ def to_public_dict(user):
         "updated_at": user.get('updated_at').isoformat() if isinstance(user.get('updated_at'), datetime) else user.get('updated_at'),
         "last_login": user.get('last_login').isoformat() if isinstance(user.get('last_login'), datetime) else user.get('last_login')
     }
+
+class User:
+    @staticmethod
+    def create_document(name, email, phone, password_hash, auth_provider="email"):
+        """
+        Creates a dictionary representation of a user document.
+        """
+        now = datetime.now(timezone.utc)
+        return {
+            "name": name,
+            "email": email.strip().lower(),
+            "phone": phone.strip() if phone else "",
+            "password_hash": password_hash,
+            "addresses": [],
+            "auth_provider": auth_provider,
+            "is_verified": False,
+            "is_active": True,
+            "created_at": now,
+            "updated_at": now,
+            "last_login": None
+        }
+
+    @staticmethod
+    def to_public_dict(user_doc):
+        """
+        Returns a user document representation safe for public exposure.
+        Delegates to the module-level to_public_dict function.
+        """
+        return to_public_dict(user_doc)

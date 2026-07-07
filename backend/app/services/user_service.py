@@ -1,13 +1,13 @@
 from bson import ObjectId
-from backend.app.models.user import validate_profile_data, to_public_dict
-from backend.app.models.address import ValidationError
+from app.models.user import validate_profile_data, to_public_dict
+from app.models.address import ValidationError
 from datetime import datetime
 
 def get_profile(user_id):
     """
     Fetches the full user profile including addresses by user_id.
     """
-    from backend.app import db
+    from app import db
     try:
         user_oid = ObjectId(user_id) if isinstance(user_id, str) else user_id
     except Exception:
@@ -21,7 +21,7 @@ def update_profile(user_id, data):
     Updates a user's profile fields. Accepts name and phone only.
     Rejects the request if 'email' is present.
     """
-    from backend.app import db
+    from app import db
     try:
         user_oid = ObjectId(user_id) if isinstance(user_id, str) else user_id
     except Exception:

@@ -31,8 +31,9 @@ export default function AdminLoginPage() {
       await login(email, password);
       // Redirect to admin dashboard
       window.location.href = "/admin/dashboard";
-    } catch (err: any) {
-      setErrors({ auth: err.message || "Invalid admin credentials" });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Invalid admin credentials";
+      setErrors({ auth: errorMessage });
     } finally {
       setIsSubmitting(false);
     }

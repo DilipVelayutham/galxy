@@ -10,7 +10,7 @@ interface User {
   phone: string;
   is_verified: boolean;
   auth_provider: string;
-  addresses?: any[];
+  addresses?: unknown[];
 }
 
 interface AuthContextType {
@@ -77,7 +77,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
               return api(originalRequest);
             }
-          } catch (refreshError) {
+          } catch {
             // Invalidate session if refresh failed
             setAccessToken(null);
             setUser(null);
@@ -112,7 +112,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUser(profileRes.data.data);
           }
         }
-      } catch (err) {
+      } catch {
         // No active session, ignore
       } finally {
         setLoading(false);
@@ -131,8 +131,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         throw new Error(res.data?.message || "Login failed");
       }
-    } catch (error: any) {
-      throw new Error(error.response?.data?.message || error.message || "Login failed");
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.message || error.message || "Login failed");
+      }
+      throw new Error(error instanceof Error ? error.message : "Login failed");
     }
   };
 
@@ -145,15 +148,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         throw new Error(res.data?.message || "Signup failed");
       }
-    } catch (error: any) {
-      throw new Error(error.response?.data?.message || error.message || "Signup failed");
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.message || error.message || "Signup failed");
+      }
+      throw new Error(error instanceof Error ? error.message : "Signup failed");
     }
   };
 
   const logout = async () => {
     try {
       await api.post("/auth/logout");
-    } catch (err) {
+    } catch {
       // Proceed with clearing local state regardless of server logout response
     } finally {
       setAccessToken(null);

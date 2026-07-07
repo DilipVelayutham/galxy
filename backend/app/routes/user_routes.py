@@ -1,11 +1,11 @@
 from flask import Blueprint, request, jsonify
 
-from backend.app.utils.auth_middleware import require_auth
-from backend.app.services import user_service, address_service
-from backend.app.models.address import ValidationError
-from backend.app.models.user import to_public_dict
+from app.utils.auth_middleware import require_auth
+from app.services import user_service, address_service
+from app.models.address import ValidationError
+from app.models.user import to_public_dict
 
-user_bp = Blueprint('user', __name__, url_prefix='/api/user')
+user_bp = Blueprint('user', __name__)
 
 @user_bp.route('/profile', methods=['GET'])
 @require_auth
@@ -58,7 +58,8 @@ def update_profile():
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"Server error: {str(e)}"
+            "message": f"Server error: {str(e)}",
+            "errors": {}
         }), 500
 
 @user_bp.route('/addresses', methods=['POST'])
@@ -87,7 +88,8 @@ def add_address():
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"Server error: {str(e)}"
+            "message": f"Server error: {str(e)}",
+            "errors": {}
         }), 500
 
 @user_bp.route('/addresses/<address_id>', methods=['PUT'])
@@ -116,7 +118,8 @@ def update_address(address_id):
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"Server error: {str(e)}"
+            "message": f"Server error: {str(e)}",
+            "errors": {}
         }), 500
 
 @user_bp.route('/addresses/<address_id>', methods=['DELETE'])
@@ -142,5 +145,6 @@ def delete_address(address_id):
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"Server error: {str(e)}"
+            "message": f"Server error: {str(e)}",
+            "errors": {}
         }), 500

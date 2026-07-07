@@ -15,22 +15,19 @@ class AdminAuthService:
     @staticmethod
     def login(email, password):
         """
-        Authenticates an admin login request.
-        Verifies credentials against the admin_users collection and issues access/refresh tokens.
+        Authenticates an admin user login request.
         """
         if not email or not password:
             raise AdminAuthServiceError("Email and password are required", 400)
 
         db = get_db()
         admin = db.admin_users.find_one({"email": email.strip().lower()})
-        if not admin:
+        
+        if not admin or not verify_password(password, admin.get("password_hash")):
             raise AdminAuthServiceError("Invalid credentials", 401)
 
         if not admin.get("is_active", True):
             raise AdminAuthServiceError("Account deactivated", 403)
-
-        if not verify_password(password, admin.get("password_hash")):
-            raise AdminAuthServiceError("Invalid credentials", 401)
 
         # Update last login
         now = datetime.now(timezone.utc)
@@ -77,10 +74,13 @@ class AdminAuthService:
         except Exception:
             raise AdminAuthServiceError("Refresh token invalid/expired", 401)
 
-        # Ensure correct role
+        # Ensure correct token type and role
+        if payload.get("type") != "refresh":
+            raise AdminAuthServiceError("Invalid token type", 401)
+
         role = payload.get("role")
         if role != "super_admin":
-            raise AdminAuthServiceError("Access denied", 403)
+            raise AdminAuthServiceError("Access denied. Admins only.", 403)
 
         admin_id = payload.get("sub")
         db = get_db()

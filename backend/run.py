@@ -11,7 +11,7 @@ if backend_dir not in sys.path:
 if workspace_dir not in sys.path:
     sys.path.append(workspace_dir)
 
-from backend.app import create_app
+from app import create_app
 
 app = create_app()
 

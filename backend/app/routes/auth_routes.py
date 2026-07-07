@@ -1,8 +1,8 @@
 import os
 from flask import Blueprint, request, jsonify, make_response
 
-from backend.app.services.auth_service import AuthService, AuthServiceError
-from backend.app.utils.rate_limiter import rate_limit_forgot_password
+from app.services.auth_service import AuthService, AuthServiceError
+from app.utils.rate_limiter import rate_limit_forgot_password
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -59,7 +59,8 @@ def signup():
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"Signup failed: {str(e)}"
+            "message": f"Signup failed: {str(e)}",
+            "errors": {}
         }), 500
 
 @auth_bp.route('/login', methods=['POST'])
@@ -67,16 +68,17 @@ def login():
     data = request.get_json() or {}
     email = data.get("email")
     if not email:
-        return jsonify({"success": False, "message": "Email is required"}), 400
+        return jsonify({"success": False, "message": "Email is required", "errors": {}}), 400
         
     # Rate limiting on IP + Email combo
     ip_addr = request.remote_addr or "unknown_ip"
     rate_key = f"{ip_addr}+{email.strip().lower()}"
-    from backend.app.utils.rate_limiter import login_limiter
+    from app.utils.rate_limiter import login_limiter
     if login_limiter.is_rate_limited(rate_key):
         return jsonify({
             "success": False,
-            "message": "Too many login attempts. Please try again after 15 minutes."
+            "message": "Too many login attempts. Please try again after 15 minutes.",
+            "errors": {}
         }), 429
 
     try:
@@ -103,7 +105,8 @@ def login():
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"Login failed: {str(e)}"
+            "message": f"Login failed: {str(e)}",
+            "errors": {}
         }), 500
 
 @auth_bp.route('/logout', methods=['POST'])
@@ -132,14 +135,16 @@ def refresh():
         # If refresh token fails, clear cookie and force re-login
         response = jsonify({
             "success": False,
-            "message": e.message
+            "message": e.message,
+            "errors": {}
         })
         _clear_refresh_cookie(response)
         return response, e.status_code
     except Exception as e:
         response = jsonify({
             "success": False,
-            "message": f"Token refresh failed: {str(e)}"
+            "message": f"Token refresh failed: {str(e)}",
+            "errors": {}
         })
         _clear_refresh_cookie(response)
         return response, 500

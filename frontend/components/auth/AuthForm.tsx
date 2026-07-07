@@ -83,8 +83,9 @@ export const AuthForm: React.FC<AuthFormProps> = ({ initialMode = "login" }) => 
         await signup(name, email, phone, password);
       }
       router.push(redirectPath);
-    } catch (err: any) {
-      setErrors({ auth: err.message || "An authentication error occurred" });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An authentication error occurred";
+      setErrors({ auth: errorMessage });
     } finally {
       setIsSubmitting(false);
     }

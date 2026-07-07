@@ -11,14 +11,14 @@ from email.mime.multipart import MIMEMultipart
 from bson import ObjectId
 
 from app.db import get_db
-from backend.app.models.user import User
-from backend.app.utils.password_helper import hash_password, verify_password
-from backend.app.utils.validators import (
+from app.models.user import User
+from app.utils.password_helper import hash_password, verify_password
+from app.utils.validators import (
     validate_email,
     validate_password,
     validate_phone,
 )
-from backend.app.utils.token_helper import (
+from app.utils.token_helper import (
     generate_access_token,
     generate_refresh_token,
     decode_token,
@@ -264,20 +264,16 @@ class AuthService:
                 401,
             )
 
-        # Verify token type
+        # Ensure correct token type
         if payload.get("type") != "refresh":
-            raise AuthServiceError(
-                "Invalid token type",
-                401,
-            )
+            raise AuthServiceError("Invalid token type", 401)
 
-        # Verify role
-        if payload.get("role") != "customer":
-            raise AuthServiceError(
-                "Access denied",
-                403,
-            )
+        # Ensure correct role
+        role = payload.get("role")
+        if role != "customer":
+            raise AuthServiceError("Access denied", 403)
 
+        user_id = payload.get("sub")
         db = get_db()
 
         user = db.users.find_one({

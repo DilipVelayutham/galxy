@@ -1,5 +1,5 @@
 from bson import ObjectId
-from backend.app.models.address import validate_address_data, ValidationError
+from app.models.address import validate_address_data, ValidationError
 
 def add_address(user_id, data):
     """
@@ -7,7 +7,7 @@ def add_address(user_id, data):
     If it is the user's first address, forces is_default to True.
     If is_default is set to True, unsets it on all other addresses.
     """
-    from backend.app import db
+    from app import db
     try:
         user_oid = ObjectId(user_id) if isinstance(user_id, str) else user_id
     except Exception:
@@ -43,7 +43,7 @@ def update_address(user_id, address_id, data):
     If is_default is set to True, unsets it on all other addresses.
     If is_default is set to False on the default address, selects another address to make default.
     """
-    from backend.app import db
+    from app import db
     try:
         user_oid = ObjectId(user_id) if isinstance(user_id, str) else user_id
         addr_oid = ObjectId(address_id) if isinstance(address_id, str) else address_id
@@ -105,7 +105,7 @@ def delete_address(user_id, address_id):
     Blocks deleting default address if there's a pending order.
     If deleting default address and no pending order, makes another address default.
     """
-    from backend.app import db
+    from app import db
     try:
         user_oid = ObjectId(user_id) if isinstance(user_id, str) else user_id
         addr_oid = ObjectId(address_id) if isinstance(address_id, str) else address_id
@@ -157,7 +157,7 @@ def set_default(user_id, address_id):
     """
     Sets the specified address as default, unsetting all others.
     """
-    from backend.app import db
+    from app import db
     try:
         user_oid = ObjectId(user_id) if isinstance(user_id, str) else user_id
         addr_oid = ObjectId(address_id) if isinstance(address_id, str) else address_id

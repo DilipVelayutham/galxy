@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, request, jsonify, make_response
+from flask import Blueprint, request, jsonify
 from app.utils.auth_middleware import require_admin
 from app.models.admin_user import AdminUser
 from app.services.admin_auth_service import AdminAuthService, AdminAuthServiceError
@@ -36,7 +36,7 @@ def login():
     password = data.get("password")
     
     if not email or not password:
-        return jsonify({"success": False, "message": "Email and password are required"}), 400
+        return jsonify({"success": False, "message": "Email and password are required", "errors": {}}), 400
         
     # Rate limiting on IP + Email combo
     ip_addr = request.remote_addr or "unknown_ip"
@@ -45,7 +45,8 @@ def login():
     if admin_login_limiter.is_rate_limited(rate_key):
         return jsonify({
             "success": False,
-            "message": "Too many login attempts. Please try again after 15 minutes."
+            "message": "Too many login attempts. Please try again after 15 minutes.",
+            "errors": {}
         }), 429
         
     try:
@@ -69,7 +70,8 @@ def login():
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"Login failed: {str(e)}"
+            "message": f"Login failed: {str(e)}",
+            "errors": {}
         }), 500
 
 @admin_auth_bp.route('/logout', methods=['POST'])
@@ -88,7 +90,7 @@ def me():
     # Retrieve fresh admin details using the service function
     admin = AdminAuthService.get_current_admin(request.admin["_id"])
     if not admin:
-        return jsonify({"success": False, "message": "Admin not found"}), 404
+        return jsonify({"success": False, "message": "Admin not found", "errors": {}}), 404
     return jsonify({
         "success": True,
         "data": {
@@ -112,14 +114,16 @@ def refresh():
     except AdminAuthServiceError as e:
         response = jsonify({
             "success": False,
-            "message": e.message
+            "message": e.message,
+            "errors": {}
         })
         _clear_refresh_cookie(response)
         return response, e.status_code
     except Exception as e:
         response = jsonify({
             "success": False,
-            "message": f"Token refresh failed: {str(e)}"
+            "message": f"Token refresh failed: {str(e)}",
+            "errors": {}
         })
         _clear_refresh_cookie(response)
         return response, 500

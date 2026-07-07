@@ -31,29 +31,28 @@ def create_app(test_config=None):
     app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", "default_secret_key_12345")
     
     # DB configuration
-    db_name = os.getenv("DATABASE_NAME", "galxy")
+    from app.db import init_db
+    if test_config:
+        app.config.update(test_config)
     
-    if test_config and test_config.get('MOCK_DB'):
-        import mongomock
-        client = mongomock.MongoClient()
-        db = client[db_name]
-    else:
-        mongo_uri = os.getenv("MONGO_URI", "")
-        if mongo_uri:
-            client = MongoClient(mongo_uri)
-            db = client[db_name]
-        else:
-            # Fallback to mongomock to ensure execution/tests run even without mongo installation
-            print("WARNING: MONGO_URI environment variable not configured. Falling back to in-memory mongomock.")
+    if app.config.get('TESTING') or (test_config and test_config.get('MOCK_DB')):
+        app.config['TESTING'] = True
+        if 'MONGO_CLIENT' not in app.config:
             import mongomock
-            client = mongomock.MongoClient()
-            db = client[db_name]
+            app.config['MONGO_CLIENT'] = mongomock.MongoClient()
+            app.config['DATABASE_NAME'] = os.getenv("DATABASE_NAME", "galxy_test")
+
+    db = init_db(app)
+    import sys
+    sys.modules[__name__].db = db
             
     # Register blueprints
-    from backend.app.routes.user_routes import user_bp
-    from backend.app.routes.admin_auth_routes import admin_auth_bp
+    from app.routes.auth_routes import auth_bp
+    from app.routes.user_routes import user_bp
+    from app.routes.admin_auth_routes import admin_auth_bp
 
-    app.register_blueprint(user_bp)
-    app.register_blueprint(admin_auth_bp)
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(user_bp, url_prefix='/api/user')
+    app.register_blueprint(admin_auth_bp, url_prefix='/api/admin/auth')
     
     return app

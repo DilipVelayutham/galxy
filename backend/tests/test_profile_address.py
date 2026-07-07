@@ -1,8 +1,8 @@
 import pytest
 import datetime
 from bson import ObjectId
-from backend.app import create_app
-from backend.app.utils.token_helper import generate_access_token
+from app import create_app
+from app.utils.token_helper import generate_access_token
 
 @pytest.fixture
 def app():
@@ -19,7 +19,7 @@ def client(app):
 
 @pytest.fixture
 def test_user(app):
-    from backend.app import db
+    from app import db
     user_id = ObjectId()
     user_data = {
         "_id": user_id,
@@ -118,7 +118,7 @@ def test_address_invariants(client, test_user):
     addr3_id = res.json['data']['_id']
 
     # Verify database state - only addr3 should be default
-    from backend.app import db
+    from app import db
     user = db.users.find_one({"_id": ObjectId(test_user['_id'])})
     for addr in user['addresses']:
         if str(addr['_id']) == addr3_id:
@@ -151,7 +151,7 @@ def test_delete_default_address_changes_default(client, test_user):
         "label": "Work", "line1": "456 Office Rd", "city": "Bangalore", "state": "Karnataka", "pincode": "560001", "is_default": True
     })
     
-    from backend.app import db
+    from app import db
     user = db.users.find_one({"_id": ObjectId(test_user['_id'])})
     addr1 = user['addresses'][0]
     addr2 = user['addresses'][1]
@@ -168,7 +168,7 @@ def test_delete_default_address_changes_default(client, test_user):
 
 def test_delete_default_address_blocked_by_pending_order(client, test_user):
     token = generate_access_token(test_user['_id'])
-    from backend.app import db
+    from app import db
     
     # Add two addresses, second is default
     client.post('/api/user/addresses', headers={"Authorization": f"Bearer {token}"}, json={

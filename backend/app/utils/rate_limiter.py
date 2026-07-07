@@ -6,7 +6,12 @@ from datetime import datetime, timezone, timedelta
 
 from flask import request, jsonify
 
-from backend.app import db
+class DbProxy:
+    def __getattr__(self, name):
+        from app.db import get_db
+        return getattr(get_db(), name)
+
+db = DbProxy()
 
 
 class RateLimiter:
@@ -64,7 +69,6 @@ def rate_limit_forgot_password(f):
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
-
         # Client IP (supports reverse proxies)
         ip = request.headers.get("X-Forwarded-For", request.remote_addr)
 

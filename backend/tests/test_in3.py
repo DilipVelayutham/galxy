@@ -279,7 +279,7 @@ class TestAuthRoutes(unittest.TestCase):
         self.assertFalse(data["success"])
         self.assertIn("Rate limit exceeded", data["errors"]["email"])
 
-    @patch('app.routes.auth_routes.reset_password')
+    @patch('app.routes.auth_routes.AuthService.reset_password')
     def test_reset_password_error_field_mapping(self, mock_reset_pw):
         # 1. Test token issue mapping
         mock_reset_pw.return_value = {

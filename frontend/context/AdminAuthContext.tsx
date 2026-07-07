@@ -25,7 +25,7 @@ interface AdminAuthContextType {
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
 // API Client instance configured for cookies and base URL specifically for admin
-const api = axios.create({
+const adminApi = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api",
   withCredentials: true, // Necessary to send and receive HTTPOnly cookies
 });
@@ -37,7 +37,7 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Setup request interceptor to attach bearer token
   useEffect(() => {
-    const requestInterceptor = api.interceptors.request.use(
+    const requestInterceptor = adminApi.interceptors.request.use(
       (config) => {
         if (accessToken) {
           config.headers["Authorization"] = `Bearer ${accessToken}`;
@@ -48,22 +48,22 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
 
     return () => {
-      api.interceptors.request.eject(requestInterceptor);
+      adminApi.interceptors.request.eject(requestInterceptor);
     };
   }, [accessToken]);
 
   // Setup response interceptor for 401 token refresh logic
   useEffect(() => {
-    const responseInterceptor = api.interceptors.response.use(
+    const responseInterceptor = adminApi.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
           try {
-            // Silently request a token refresh via admin endpoint
+            // Silently request a token refresh for admin
             const res = await axios.post(
-              `${api.defaults.baseURL}/admin/auth/refresh`,
+              `${adminApi.defaults.baseURL}/admin/auth/refresh`,
               {},
               { withCredentials: true }
             );
@@ -74,10 +74,10 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({ children 
               
               // Retry original request with new token
               originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
-              return api(originalRequest);
+              return adminApi(originalRequest);
             }
           } catch (refreshError) {
-            // Invalidate session if refresh failed
+            // Invalidate admin session if refresh failed
             setAccessToken(null);
             setAdmin(null);
             // On refresh failure, redirect to admin login if we are in admin route (excluding login page itself)
@@ -94,25 +94,25 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
 
     return () => {
-      api.interceptors.response.eject(responseInterceptor);
+      adminApi.interceptors.response.eject(responseInterceptor);
     };
   }, []);
 
-  // Hydrate session silently on application mount
+  // Hydrate admin session silently on application mount
   useEffect(() => {
-    const hydrateSession = async () => {
+    const hydrateAdminSession = async () => {
       try {
-        const res = await api.post("/admin/auth/refresh");
+        const res = await adminApi.post("/admin/auth/refresh");
         if (res.data?.success) {
           const newAccessToken = res.data.data.access_token;
           setAccessToken(newAccessToken);
           
-          // Load public profile for admin
-          const profileRes = await api.get("/admin/auth/me", {
+          // Load admin details
+          const meRes = await adminApi.get("/admin/auth/me", {
             headers: { Authorization: `Bearer ${newAccessToken}` }
           });
-          if (profileRes.data?.success) {
-            setAdmin(profileRes.data.data.admin);
+          if (meRes.data?.success) {
+            setAdmin(meRes.data.data.admin);
           }
         }
       } catch (err) {
@@ -122,26 +122,29 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
     };
 
-    hydrateSession();
+    hydrateAdminSession();
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
-      const res = await api.post("/admin/auth/login", { email, password });
+      const res = await adminApi.post("/admin/auth/login", { email, password });
       if (res.data?.success) {
         setAccessToken(res.data.data.access_token);
         setAdmin(res.data.data.admin);
       } else {
         throw new Error(res.data?.message || "Login failed");
       }
-    } catch (error: any) {
-      throw new Error(error.response?.data?.message || error.message || "Login failed");
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.message || error.message || "Login failed");
+      }
+      throw new Error(error instanceof Error ? error.message : "Login failed");
     }
   };
 
   const logout = async () => {
     try {
-      await api.post("/admin/auth/logout");
+      await adminApi.post("/admin/auth/logout");
     } catch (err) {
       // Proceed with clearing local state regardless of server logout response
     } finally {
@@ -154,7 +157,7 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   return (
-    <AdminAuthContext.Provider value={{ admin, accessToken, loading, login, logout, api }}>
+    <AdminAuthContext.Provider value={{ admin, accessToken, loading, login, logout, api: adminApi }}>
       {children}
     </AdminAuthContext.Provider>
   );

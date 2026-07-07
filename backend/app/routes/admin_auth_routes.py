@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, request, jsonify
 from app.utils.auth_middleware import require_admin
 from app.models.admin_user import AdminUser
+from app.services.admin_auth_service import AdminAuthService, AdminAuthServiceError
 
 admin_auth_bp = Blueprint('admin_auth', __name__)
 
@@ -14,9 +15,9 @@ def _set_refresh_cookie(response, refresh_token):
         value=refresh_token,
         httponly=True,
         secure=is_prod,
-        samesite='Lax',
-        max_age=30 * 24 * 60 * 60,
-        path='/api/admin/auth'
+        samesite='Lax',  # Needed for local cross-port development
+        max_age=30 * 24 * 60 * 60,  # 30 days
+        path='/api/admin/auth'  # Keep cookie scoped to admin auth endpoints
     )
 
 def _clear_refresh_cookie(response):
@@ -27,8 +28,6 @@ def _clear_refresh_cookie(response):
         secure=is_prod,
         samesite='Lax'
     )
-
-from app.services.admin_auth_service import AdminAuthService, AdminAuthServiceError
 
 @admin_auth_bp.route('/login', methods=['POST'])
 def login():
@@ -51,11 +50,12 @@ def login():
         }), 429
         
     try:
-        admin_dict, access_token, refresh_token = AdminAuthService.login_admin(email, password)
+        admin_data, access_token, refresh_token = AdminAuthService.login(email, password)
+        
         response = jsonify({
             "success": True,
             "data": {
-                "admin": admin_dict,
+                "admin": admin_data,
                 "access_token": access_token
             }
         })
@@ -65,20 +65,44 @@ def login():
         return jsonify({
             "success": False,
             "message": e.message,
-            "errors": {}
+            "errors": { "auth": e.message }
         }), e.status_code
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"Admin login failed: {str(e)}",
+            "message": f"Login failed: {str(e)}",
             "errors": {}
         }), 500
+
+@admin_auth_bp.route('/logout', methods=['POST'])
+def logout():
+    AdminAuthService.logout()
+    response = jsonify({
+        "success": True,
+        "message": "Logged out"
+    })
+    _clear_refresh_cookie(response)
+    return response, 200
+
+@admin_auth_bp.route('/me', methods=['GET'])
+@require_admin
+def me():
+    # Retrieve fresh admin details using the service function
+    admin = AdminAuthService.get_current_admin(request.admin["_id"])
+    if not admin:
+        return jsonify({"success": False, "message": "Admin not found", "errors": {}}), 404
+    return jsonify({
+        "success": True,
+        "data": {
+            "admin": AdminUser.to_public_dict(admin)
+        }
+    }), 200
 
 @admin_auth_bp.route('/refresh', methods=['POST'])
 def refresh():
     refresh_token = request.cookies.get(COOKIE_NAME)
     try:
-        new_access, new_refresh = AdminAuthService.refresh_admin_tokens(refresh_token)
+        new_access, new_refresh = AdminAuthService.refresh_tokens(refresh_token)
         response = jsonify({
             "success": True,
             "data": {
@@ -103,24 +127,3 @@ def refresh():
         })
         _clear_refresh_cookie(response)
         return response, 500
-
-@admin_auth_bp.route('/logout', methods=['POST'])
-def logout():
-    response = jsonify({
-        "success": True,
-        "message": "Logged out"
-    })
-    _clear_refresh_cookie(response)
-    return response, 200
-
-@admin_auth_bp.route('/me', methods=['GET'])
-@require_admin
-def me():
-    # request.admin is attached by the @require_admin decorator
-    admin = request.admin
-    return jsonify({
-        "success": True,
-        "data": {
-            "admin": AdminUser.to_public_dict(admin)
-        }
-    }), 200

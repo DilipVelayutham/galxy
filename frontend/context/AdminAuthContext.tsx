@@ -8,6 +8,9 @@ interface Admin {
   name: string;
   email: string;
   role: string;
+  is_active: boolean;
+  last_login?: string;
+  created_at: string;
 }
 
 interface AdminAuthContextType {
@@ -21,7 +24,7 @@ interface AdminAuthContextType {
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
-// API Client instance configured for admin endpoints
+// API Client instance configured for cookies and base URL specifically for admin
 const adminApi = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api",
   withCredentials: true, // Necessary to send and receive HTTPOnly cookies
@@ -73,13 +76,16 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({ children 
               originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
               return adminApi(originalRequest);
             }
-          } catch {
+          } catch (refreshError) {
             // Invalidate admin session if refresh failed
             setAccessToken(null);
             setAdmin(null);
-            // On refresh failure, redirect to admin login
-            if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin") && window.location.pathname !== "/admin/login") {
-              window.location.href = `/admin/login`;
+            // On refresh failure, redirect to admin login if we are in admin route (excluding login page itself)
+            if (typeof window !== "undefined") {
+              const pathname = window.location.pathname;
+              if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+                window.location.href = `/admin/login`;
+              }
             }
           }
         }
@@ -98,17 +104,18 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({ children 
       try {
         const res = await adminApi.post("/admin/auth/refresh");
         if (res.data?.success) {
-          setAccessToken(res.data.data.access_token);
+          const newAccessToken = res.data.data.access_token;
+          setAccessToken(newAccessToken);
           
           // Load admin details
           const meRes = await adminApi.get("/admin/auth/me", {
-            headers: { Authorization: `Bearer ${res.data.data.access_token}` }
+            headers: { Authorization: `Bearer ${newAccessToken}` }
           });
           if (meRes.data?.success) {
             setAdmin(meRes.data.data.admin);
           }
         }
-      } catch {
+      } catch (err) {
         // No active session, ignore
       } finally {
         setLoading(false);
@@ -138,7 +145,7 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({ children 
   const logout = async () => {
     try {
       await adminApi.post("/admin/auth/logout");
-    } catch {
+    } catch (err) {
       // Proceed with clearing local state regardless of server logout response
     } finally {
       setAccessToken(null);

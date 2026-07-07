@@ -1,20 +1,27 @@
-// TEMPORARY PLACEHOLDER: Owned by in3 (Tharani Jayaprakash).
-// This validators module is kept here temporarily for local authentication forms to function,
-// and should be replaced/removed upon merging in3's branch to avoid conflicts.
+/**
+ * Client-side validation module for GALXY Module 1.
+ * Matches backend validation rules and error messages exactly.
+ */
 
-export function validateEmail(email: string): { isValid: boolean; error?: string } {
+export interface ValidationResult {
+  isValid: boolean;
+  error: string;
+  value?: string;
+}
+
+export function validateEmail(email: string): ValidationResult {
   if (!email) {
     return { isValid: false, error: "Email is required" };
   }
-  const normalized = email.trim().toLowerCase();
-  const pattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  if (!pattern.test(normalized)) {
+  const cleanEmail = email.trim();
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(cleanEmail)) {
     return { isValid: false, error: "Invalid email format" };
   }
-  return { isValid: true };
+  return { isValid: true, error: "", value: cleanEmail.toLowerCase() };
 }
 
-export function validatePassword(password: string): { isValid: boolean; error?: string } {
+export function validatePassword(password: string): ValidationResult {
   if (!password) {
     return { isValid: false, error: "Password is required" };
   }
@@ -27,29 +34,29 @@ export function validatePassword(password: string): { isValid: boolean; error?: 
   if (!/\d/.test(password)) {
     return { isValid: false, error: "Password must contain at least one number" };
   }
-  return { isValid: true };
+  return { isValid: true, error: "" };
 }
 
-export function validatePhone(phone: string): { isValid: boolean; error?: string } {
+export function validatePhone(phone: string): ValidationResult {
   if (!phone) {
     return { isValid: false, error: "Phone number is required" };
   }
-  const clean = phone.trim();
-  const pattern = /^[6-9]\d{9}$/;
-  if (!pattern.test(clean)) {
-    return { isValid: false, error: "Phone must be a valid 10-digit Indian mobile number" };
+  const cleanPhone = phone.trim();
+  const phoneRegex = /^[6-9]\d{9}$/;
+  if (!phoneRegex.test(cleanPhone)) {
+    return { isValid: false, error: "Phone number must be a valid 10-digit Indian mobile number" };
   }
-  return { isValid: true };
+  return { isValid: true, error: "", value: cleanPhone };
 }
 
-export function validatePincode(pincode: string): { isValid: boolean; error?: string } {
+export function validatePincode(pincode: string): ValidationResult {
   if (!pincode) {
     return { isValid: false, error: "Pincode is required" };
   }
-  const clean = pincode.trim();
-  const pattern = /^\d{6}$/;
-  if (!pattern.test(clean)) {
-    return { isValid: false, error: "Pincode must be a 6-digit numeric code" };
+  const cleanPincode = pincode.trim();
+  const pincodeRegex = /^\d{6}$/;
+  if (!pincodeRegex.test(cleanPincode)) {
+    return { isValid: false, error: "Pincode must be exactly 6 digits" };
   }
-  return { isValid: true };
+  return { isValid: true, error: "", value: cleanPincode };
 }

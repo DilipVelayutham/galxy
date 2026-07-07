@@ -13,7 +13,7 @@ class AdminAuthServiceError(Exception):
 
 class AdminAuthService:
     @staticmethod
-    def login_admin(email, password):
+    def login(email, password):
         """
         Authenticates an admin user login request.
         """
@@ -34,27 +34,37 @@ class AdminAuthService:
         db.admin_users.update_one({"_id": admin["_id"]}, {"$set": {"last_login": now}})
         admin["last_login"] = now
 
-        # Generate tokens
+        # Generate tokens with role: super_admin
         access_token = generate_access_token(admin["_id"], "super_admin")
         refresh_token = generate_refresh_token(admin["_id"], "super_admin")
 
         return AdminUser.to_public_dict(admin), access_token, refresh_token
 
     @staticmethod
-    def get_admin_profile(admin_id):
+    def get_current_admin(admin_id):
         """
-        Retrieves the profile of an admin user.
+        Retrieves the admin user record by ID.
         """
+        try:
+            admin_oid = ObjectId(admin_id) if isinstance(admin_id, str) else admin_id
+        except Exception:
+            return None
+
         db = get_db()
-        admin = db.admin_users.find_one({"_id": ObjectId(admin_id)})
-        if not admin:
-            raise AdminAuthServiceError("Admin not found", 404)
-        return AdminUser.to_public_dict(admin)
+        admin = db.admin_users.find_one({"_id": admin_oid})
+        return admin
 
     @staticmethod
-    def refresh_admin_tokens(refresh_token_str):
+    def logout():
         """
-        Verifies refresh token and issues a new access token and rotated refresh token for admin.
+        Handles admin logout. Currently stateless on the server side.
+        """
+        return True
+
+    @staticmethod
+    def refresh_tokens(refresh_token_str):
+        """
+        Verifies the admin refresh token and issues a new access token and rotated refresh token.
         """
         if not refresh_token_str:
             raise AdminAuthServiceError("Refresh token is missing", 401)

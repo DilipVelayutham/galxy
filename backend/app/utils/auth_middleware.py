@@ -1,6 +1,10 @@
 import functools
 from flask import request, jsonify
-from app.utils.token_helper import decode_token, ExpiredTokenError, InvalidTokenError
+from app.utils.token_helper import (
+    decode_token,
+    ExpiredTokenError,
+    InvalidTokenError,
+)
 from app.db import get_db
 from bson import ObjectId
 

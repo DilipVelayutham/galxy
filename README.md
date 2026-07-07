@@ -51,13 +51,29 @@ Merge into main
 
 ## Module Status
 
-- [ ] Authentication
-- [ ] Profile
-- [ ] Address
-- [ ] Password Reset
-- [ ] Admin Authentication
-- [ ] Testing
-- [ ] Documentation
+- [x] Authentication
+- [x] Profile
+- [x] Address
+- [x] Password Reset
+- [x] Admin Authentication
+- [x] Testing
+- [x] Documentation
+
+---
+
+## Architectural Decisions & Scope Deferrals (v1)
+
+### 1. Cookie SameSite Directive ('Lax')
+The JWT session refresh cookies are configured with `sameSite='Lax'` instead of `'strict'`. This is a deliberate decision to support cross-port local developer configurations (e.g. frontend running on `http://localhost:3000` and backend running on `http://localhost:5000`), allowing correct cookie transmission across origins during local integration.
+
+### 2. Google OAuth Deferral
+While the `users` collection model includes an `auth_provider` schema field, Google OAuth authentication is not in scope for the v1 delivery of this module. Users sign up and log in using email/password. Google OAuth endpoints and services are intentionally deferred to future versions.
+
+### 3. Email Verification Flow Deferral
+The `is_verified` boolean field is initialized to `false` for user accounts. Active email validation flows and verification endpoints are intentionally deferred for v1.
+
+### 4. Admin Invite Flow Deferral
+As outlined in the specifications, admin credentials are seeded directly in the database (single account for Asil at launch). Admin invite flows and staff permission systems are deferred.
 
 ---
 

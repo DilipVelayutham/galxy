@@ -19,7 +19,6 @@ def create_app(test_config=None):
     global db
     
     app = Flask(__name__)
-    CORS(app)
     
     # Load env variables from backend/.env or backend/.env.example
     env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
@@ -27,6 +26,10 @@ def create_app(test_config=None):
         load_dotenv(env_path)
     else:
         load_dotenv()
+        
+    # Configure CORS to support credentials (needed for httpOnly refresh cookies)
+    allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    CORS(app, resources={r"/api/*": {"origins": allowed_origins}}, supports_credentials=True)
         
     app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", "default_secret_key_12345")
     

@@ -26,10 +26,11 @@ from app.utils.token_helper import (
 
 
 class AuthServiceError(Exception):
-    def __init__(self, message, status_code=400):
+    def __init__(self, message, status_code=400, errors=None):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+        self.errors = errors or {}
 
 
 def _send_reset_email(email: str, token: str) -> bool:
@@ -109,19 +110,19 @@ class AuthService:
         """
 
         if not name or not name.strip():
-            raise AuthServiceError("Name is required", 400)
+            raise AuthServiceError("Name is required", 400, {"name": "Name is required"})
 
         valid_email, email_val = validate_email(email)
         if not valid_email:
-            raise AuthServiceError(email_val, 400)
+            raise AuthServiceError(email_val, 400, {"email": email_val})
 
         valid_password, password_val = validate_password(password)
         if not valid_password:
-            raise AuthServiceError(password_val, 400)
+            raise AuthServiceError(password_val, 400, {"password": password_val})
 
         valid_phone, phone_val = validate_phone(phone)
         if not valid_phone:
-            raise AuthServiceError(phone_val, 400)
+            raise AuthServiceError(phone_val, 400, {"phone": phone_val})
 
         db = get_db()
 
@@ -132,7 +133,8 @@ class AuthService:
         if existing_user:
             raise AuthServiceError(
                 "Email already registered",
-                409
+                409,
+                {"email": "Email already registered"}
             )
 
         password_hash = hash_password(password_val)
@@ -170,9 +172,15 @@ class AuthService:
         """
 
         if not email or not password:
+            errors = {}
+            if not email:
+                errors["email"] = "Email is required"
+            if not password:
+                errors["password"] = "Password is required"
             raise AuthServiceError(
                 "Email and password are required",
                 400,
+                errors
             )
 
         valid_email, email_val = validate_email(email)
@@ -181,6 +189,7 @@ class AuthService:
             raise AuthServiceError(
                 "Invalid email format",
                 400,
+                {"email": "Invalid email format"}
             )
 
         db = get_db()
@@ -193,12 +202,14 @@ class AuthService:
             raise AuthServiceError(
                 "Invalid credentials",
                 401,
+                {"email": "Invalid credentials", "password": "Invalid credentials"}
             )
 
         if not user.get("is_active", True):
             raise AuthServiceError(
                 "Account deactivated",
                 403,
+                {"email": "Account deactivated"}
             )
 
         if not verify_password(
@@ -208,6 +219,7 @@ class AuthService:
             raise AuthServiceError(
                 "Invalid credentials",
                 401,
+                {"email": "Invalid credentials", "password": "Invalid credentials"}
             )
 
         now = datetime.now(timezone.utc)
@@ -253,6 +265,7 @@ class AuthService:
             raise AuthServiceError(
                 "Refresh token is missing",
                 401,
+                {"refresh_token": "Refresh token is missing"}
             )
 
         try:
@@ -262,16 +275,17 @@ class AuthService:
             raise AuthServiceError(
                 "Refresh token invalid/expired",
                 401,
+                {"refresh_token": "Refresh token invalid/expired"}
             )
 
         # Ensure correct token type
         if payload.get("type") != "refresh":
-            raise AuthServiceError("Invalid token type", 401)
+            raise AuthServiceError("Invalid token type", 401, {"refresh_token": "Invalid token type"})
 
         # Ensure correct role
         role = payload.get("role")
         if role != "customer":
-            raise AuthServiceError("Access denied", 403)
+            raise AuthServiceError("Access denied", 403, {"refresh_token": "Access denied"})
 
         user_id = payload.get("sub")
         db = get_db()
@@ -284,12 +298,14 @@ class AuthService:
             raise AuthServiceError(
                 "User not found",
                 401,
+                {"refresh_token": "User not found"}
             )
 
         if not user.get("is_active", True):
             raise AuthServiceError(
                 "Account deactivated",
                 403,
+                {"refresh_token": "Account deactivated"}
             )
 
         new_access = generate_access_token(
@@ -462,6 +478,20 @@ class AuthService:
                     ),
                 }
             },
+        )
+
+        # Invalidate all other unused password reset tokens for this email
+        db.password_resets.update_many(
+            {
+                "email": reset_record["email"],
+                "is_used": False
+            },
+            {
+                "$set": {
+                    "is_used": True,
+                    "invalidated_at": datetime.now(timezone.utc)
+                }
+            }
         )
 
         return {

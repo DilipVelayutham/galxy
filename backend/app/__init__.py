@@ -28,7 +28,18 @@ def create_app(test_config=None):
         load_dotenv()
         
     # Configure CORS to support credentials (needed for httpOnly refresh cookies)
-    allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+    allowed_origins = allowed_origins_env.split(",")
+    
+    # Production guard: warning if ALLOWED_ORIGINS contains wildcard '*' when FLASK_ENV=production
+    flask_env = os.getenv("FLASK_ENV", "development").lower()
+    if flask_env == "production" and "*" in [origin.strip() for origin in allowed_origins]:
+        import warnings
+        import logging
+        warning_msg = "CORS: ALLOWED_ORIGINS contains wildcard '*' in production! This is a security risk when supporting credentials."
+        warnings.warn(warning_msg, UserWarning)
+        logging.warning(warning_msg)
+        
     CORS(app, resources={r"/api/*": {"origins": allowed_origins}}, supports_credentials=True)
         
     app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", "default_secret_key_12345")

@@ -390,5 +390,56 @@ class AuthTestCase(unittest.TestCase):
         # Should be allowed again
         self.assertFalse(limiter.is_rate_limited(key))
 
+    def test_admin_token_rejected_on_customer_routes(self):
+        # Seed an admin
+        admin_pass_hash = hash_password("AdminPass123")
+        admin_doc = AdminUser.create_document("Admin Asil", "admin_iso@galxy.in", admin_pass_hash)
+        admin_id = self.db.admin_users.insert_one(admin_doc).inserted_id
+        
+        # Generate admin access token
+        admin_token = generate_access_token(admin_id, "super_admin")
+        
+        # Call customer-only route (e.g. GET /api/user/profile)
+        res = self.client.get('/api/user/profile', headers={
+            "Authorization": f"Bearer {admin_token}"
+        })
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("Access denied", res.get_json()["message"])
+
+    def test_customer_token_rejected_on_admin_routes(self):
+        # Seed a customer
+        cust_pass_hash = hash_password("CustPass123")
+        cust_doc = User.create_document("Customer", "cust_iso@galxy.in", "9876543211", cust_pass_hash)
+        cust_id = self.db.users.insert_one(cust_doc).inserted_id
+        
+        # Generate customer access token
+        cust_token = generate_access_token(cust_id, "customer")
+        
+        # Call admin-only route (e.g. GET /api/admin/auth/me)
+        res = self.client.get('/api/admin/auth/me', headers={
+            "Authorization": f"Bearer {cust_token}"
+        })
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("Access denied", res.get_json()["message"])
+
+    def test_expired_refresh_token_rejected(self):
+        user_id = ObjectId()
+        # Create an expired refresh token payload
+        payload = {
+            "sub": str(user_id),
+            "role": "customer",
+            "type": "refresh",
+            "exp": int(time.time()) - 3600  # Expired 1 hour ago
+        }
+        import jwt
+        from app.configs.jwt_config import JWTConfig
+        expired_token = jwt.encode(payload, JWTConfig.JWT_SECRET, algorithm="HS256")
+        
+        # Try to refresh customer token using expired refresh token
+        self.client.set_cookie('refresh_token', expired_token, path='/api/auth')
+        res = self.client.post('/api/auth/refresh')
+        self.assertEqual(res.status_code, 401)
+        self.assertIn("invalid/expired", res.get_json()["message"])
+
 if __name__ == '__main__':
     unittest.main()

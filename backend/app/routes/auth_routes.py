@@ -54,7 +54,7 @@ def signup():
         return jsonify({
             "success": False,
             "message": e.message,
-            "errors": { "auth": e.message }
+            "errors": e.errors
         }), e.status_code
     except Exception as e:
         return jsonify({
@@ -68,7 +68,7 @@ def login():
     data = request.get_json() or {}
     email = data.get("email")
     if not email:
-        return jsonify({"success": False, "message": "Email is required", "errors": {}}), 400
+        return jsonify({"success": False, "message": "Email is required", "errors": {"email": "Email is required"}}), 400
         
     # Rate limiting on IP + Email combo
     ip_addr = request.remote_addr or "unknown_ip"
@@ -100,7 +100,7 @@ def login():
         return jsonify({
             "success": False,
             "message": e.message,
-            "errors": { "auth": e.message }
+            "errors": e.errors
         }), e.status_code
     except Exception as e:
         return jsonify({
@@ -136,7 +136,7 @@ def refresh():
         response = jsonify({
             "success": False,
             "message": e.message,
-            "errors": {}
+            "errors": e.errors
         })
         _clear_refresh_cookie(response)
         return response, e.status_code

@@ -36,7 +36,12 @@ def login():
     password = data.get("password")
     
     if not email or not password:
-        return jsonify({"success": False, "message": "Email and password are required", "errors": {}}), 400
+        errors = {}
+        if not email:
+            errors["email"] = "Email is required"
+        if not password:
+            errors["password"] = "Password is required"
+        return jsonify({"success": False, "message": "Email and password are required", "errors": errors}), 400
         
     # Rate limiting on IP + Email combo
     ip_addr = request.remote_addr or "unknown_ip"
@@ -65,7 +70,7 @@ def login():
         return jsonify({
             "success": False,
             "message": e.message,
-            "errors": { "auth": e.message }
+            "errors": e.errors
         }), e.status_code
     except Exception as e:
         return jsonify({
@@ -115,7 +120,7 @@ def refresh():
         response = jsonify({
             "success": False,
             "message": e.message,
-            "errors": {}
+            "errors": e.errors
         })
         _clear_refresh_cookie(response)
         return response, e.status_code

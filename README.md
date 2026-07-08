@@ -131,5 +131,8 @@ All endpoints return standardized JSON structures conforming to the following co
 - Deploy Next.js onto **Vercel** or compile locally:
   ```bash
   npm run build
+  ```
+  ```bash
   npm run start
   ```
+

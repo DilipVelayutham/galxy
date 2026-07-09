@@ -2,7 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 
 from app.configs.env_config import Config
-from app.database.db import db
+from app.database.db import db as mongo_db
 
 def create_app(config_class=Config):
     """Application factory for the GALXY backend."""
@@ -18,23 +18,27 @@ def create_app(config_class=Config):
     # Avoid initializing if we're in mock-test environment or db is bypassed
     if not app.config.get("TESTING"):
         try:
-            db.init_app(app)
+            mongo_db.init_app(app)
         except Exception as e:
             app.logger.error(f"Failed to initialize database: {e}")
 
-    # Register blueprints
+    # Register blueprints (imported locally to avoid circular import issues)
     from app.routes.testimonial_routes import testimonial_bp
     from app.routes.admin_testimonial_routes import admin_testimonial_bp
+    from app.routes.review_routes import review_bp
+    from app.routes.admin_review_routes import admin_review_bp
 
     app.register_blueprint(testimonial_bp)
     app.register_blueprint(admin_testimonial_bp)
+    app.register_blueprint(review_bp, url_prefix="/api")
+    app.register_blueprint(admin_review_bp, url_prefix="/api/admin")
 
     # Generic health check
     from app.utils.response_helper import success_response, error_response
     
     @app.route("/api/health", methods=["GET"])
     def health():
-        return success_response({"status": "ok"}, "Galxy Testimonials sub-module is running.")
+        return success_response({"status": "ok"}, "Galxy Reviews & Testimonials backend is running.")
 
     # Global error handlers
     @app.errorhandler(404)

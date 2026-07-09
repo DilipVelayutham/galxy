@@ -1,0 +1,201 @@
+{
+  "info": {
+    "_postman_id": "a90b4d4b-741a-4712-ba78-9e55728a38db",
+    "name": "GALXY - Module 6: Cart API",
+    "description": "Postman Collection for GALXY E-commerce Shopping Cart Endpoints (Module 6 Backend)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Get Cart",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "60d5ec42f1b0a823483fb3a4",
+            "description": "Mock User ObjectId for testing",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/cart",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "cart"
+          ]
+        },
+        "description": "Returns items, item_count, and subtotal_estimate for the authenticated user. Auto-creates cart if missing."
+      },
+      "response": []
+    },
+    {
+      "name": "Add Item to Cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "60d5ec42f1b0a823483fb3a4",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"product_id\": \"60d5ec42f1b0a823483fb3a5\",\n  \"quantity\": 1,\n  \"selected_attributes\": {\n    \"font\": \"cursive\",\n    \"color\": \"pink\"\n  },\n  \"custom_text\": \"Neon Dream\",\n  \"ai_preview_image\": \"https://res.cloudinary.com/test/preview.jpg\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/cart/items",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "cart",
+            "items"
+          ]
+        },
+        "description": "Adds a configured product to the cart. Performs schema validation and pricing on server. Merges quantity if duplicate item is added."
+      },
+      "response": []
+    },
+    {
+      "name": "Update Cart Item",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "60d5ec42f1b0a823483fb3a4",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"quantity\": 3,\n  \"selected_attributes\": {\n    \"font\": \"bold\",\n    \"color\": \"blue\"\n  },\n  \"custom_text\": \"Glow Sign\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/cart/items/:item_id",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "cart",
+            "items",
+            ":item_id"
+          ],
+          "variable": [
+            {
+              "key": "item_id",
+              "value": "60d5ec42f1b0a823483fb3b9",
+              "description": "ObjectId of the cart item to update"
+            }
+          ]
+        },
+        "description": "Updates selected attributes, custom text, and/or quantity of an item in the cart. Recalculates pricing."
+      },
+      "response": []
+    },
+    {
+      "name": "Remove Item from Cart",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "60d5ec42f1b0a823483fb3a4",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/cart/items/:item_id",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "cart",
+            "items",
+            ":item_id"
+          ],
+          "variable": [
+            {
+              "key": "item_id",
+              "value": "60d5ec42f1b0a823483fb3b9",
+              "description": "ObjectId of the cart item to remove"
+            }
+          ]
+        },
+        "description": "Removes a specific configured item from the user's cart."
+      },
+      "response": []
+    },
+    {
+      "name": "Clear Cart",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "X-User-Id",
+            "value": "60d5ec42f1b0a823483fb3a4",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/cart/clear",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "cart",
+            "clear"
+          ]
+        },
+        "description": "Clears all items from the user's cart (called automatically upon checkout)."
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+/jspm_packages/
+.pnp
+.pnp.js
+
+# Testing
+/coverage/
+.nyc_output
+.pytest_cache/
+.vitest/
+
+# Next.js Build Output
+/.next/
+/out/
+
+# Production Build
+/build/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Python virtual envs and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+ENV/
+env/
+.env
+
+# Pytest caches
+.pytest_cache/
+.pytest/
+htmlcov/
+.coverage
+.coverage.*

@@ -1,0 +1,15 @@
+# Core Flask
+Flask==3.0.3
+flask-cors==4.0.1
+
+# Database
+pymongo==4.7.2
+
+# JWT
+PyJWT==2.8.0
+
+# Environment variables
+python-dotenv==1.0.1
+
+# Testing
+pytest==8.2.2

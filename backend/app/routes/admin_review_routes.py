@@ -6,7 +6,7 @@ admin_review_bp = Blueprint("admin_reviews", __name__)
 
 @admin_review_bp.route("/reviews", methods=["GET"])
 @token_required
-@role_required(["admin"])
+@role_required(["admin", "super_admin"])
 def get_admin_reviews():
     """
     GET /api/admin/reviews
@@ -40,7 +40,7 @@ def get_admin_reviews():
 
 @admin_review_bp.route("/reviews/<id>/approve", methods=["PUT"])
 @token_required
-@role_required(["admin"])
+@role_required(["admin", "super_admin"])
 def approve_review(id):
     """
     PUT /api/admin/reviews/:id/approve
@@ -52,7 +52,7 @@ def approve_review(id):
 
 @admin_review_bp.route("/reviews/<id>/reject", methods=["PUT"])
 @token_required
-@role_required(["admin"])
+@role_required(["admin", "super_admin"])
 def reject_review(id):
     """
     PUT /api/admin/reviews/:id/reject
@@ -72,7 +72,7 @@ def reject_review(id):
 
 @admin_review_bp.route("/reviews/<id>", methods=["DELETE"])
 @token_required
-@role_required(["admin"])
+@role_required(["admin", "super_admin"])
 def delete_review(id):
     """
     DELETE /api/admin/reviews/:id
@@ -84,7 +84,7 @@ def delete_review(id):
 
 @admin_review_bp.route("/reviews/<id>/promote-to-testimonial", methods=["POST"])
 @token_required
-@role_required(["admin"])
+@role_required(["admin", "super_admin"])
 def promote_to_testimonial(id):
     """
     POST /api/admin/reviews/:id/promote-to-testimonial

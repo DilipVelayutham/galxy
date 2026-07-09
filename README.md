@@ -1,59 +1,137 @@
-# GALXY - Module 9A Backend: Reviews
+# GALXY Custom Studio storefront & API Engine
 
-This repository implements **Sub-Module 9A – Backend: Reviews** in Flask + MongoDB. The Reviews module provides customer product reviews, rating rollup calculation (updating product review stats dynamically), image uploads, and admin moderation features.
-
-## Architecture & Responsibilities
-
-- **Models** (`backend/app/models/review.py`): Defines the MongoDB review schema and serializes outputs. Supports a `public=True` serialization option that hides private user identity fields (`user_id`, `order_id`).
-- **Services**:
-  - `review_service.py`: Contains core review flows, verifying purchase checks, duplicate checks, image uploads, moderation (approving, rejecting, deleting), and promoting reviews to testimonials.
-  - `rating_rollup_service.py`: Calculates average ratings and review counts from approved reviews, updating the products database collection.
-- **Routes**:
-  - `review_routes.py`: Registers public review endpoints: review submissions and public approved reviews queries.
-  - `admin_review_routes.py`: Registers admin moderation endpoints: approve, reject, delete, list, and promote reviews to testimonials.
-
-## Integration & Dependencies
-
-This module strictly coordinates with the following components:
-1. **Module 8 (Order Service)**: Consumes the `order_service.has_delivered_order_for_product(user_id, product_id)` helper. If Module 8 is unavailable, review submission returns a `500` integration error.
-2. **Module 10 (Cloudinary Upload Helper)**: Consumes the upload helper for image file uploads. If unavailable, file upload attempts return a `500` integration error.
-3. **Module 3 (Products Collection)**: Updates fields `rating_avg` and `rating_count` under the product document. No other product fields are modified.
-4. **Module 1 (User Profiles)**: Snapshots client name from user profiles during review submission.
-5. **Testimonials Collection**: Writes promoted review data directly into the `testimonials` collection.
+This repository contains the complete **GALXY** Custom Lighting and Craft Studio storefront. It is organized as a monorepo consisting of a modular Python Flask API backend and a responsive, high-fidelity Next.js frontend styled with the Custom Dark Neon Design System.
 
 ---
 
-## Configuration & Environment Variables
+## 1. System Architecture
 
-Create a `backend/.env` file with the following variables:
-```env
-FLASK_ENV=development
-MONGO_URI=mongodb+srv://snehaharikrishnan5_db_user:<db_password>@cluster0.s6yb2yr.mongodb.net/reviews_db?appName=Cluster0
-DB_NAME=reviews_db
-JWT_SECRET=default_jwt_secret_key_12345
-JWT_ALGORITHM=HS256
-PORT=5000
-```
-Ensure you replace `<db_password>` with the actual database access password.
+The monorepo structure is split into two primary folders:
+1. **`/backend`**: REST API built with Flask, using MongoDB as the primary data store.
+2. **`/frontend`**: Next.js App Router web application integrated with Tailwind CSS v4 and TypeScript.
 
-## Installation
-
-Install the required Python dependencies:
-```bash
-pip install -r backend/requirements.txt
+```mermaid
+graph TD
+    Client[Next.js Storefront App] -->|HTTPS Requests| API[Flask API Server]
+    API -->|Session Auth| DB[(MongoDB database)]
+    API -->|Prompt Generation| Gemini[Gemini AI preview Engine]
 ```
 
-## How to Run
+---
 
-Start the Flask development server:
-```bash
-py backend/run.py
-```
+## 2. Database Documentation (MongoDB)
 
-## How to Test
+The data model uses six core collections configured in [seed.py](file:///D:/review%20rating/backend/seed.py):
 
-Run the unit test suite:
-```bash
-$env:PYTHONPATH="backend"; py -m pytest backend/tests/test_reviews.py
-```
-All unit tests are executed using an in-memory `mongomock` client.
+### 2.1 Collections Schema
+1. **`users`**: Customer credentials, roles, and profiles.
+2. **`admin_users`**: Role-based admins with access to moderation actions.
+3. **`categories`**: Dynamic attribute schemas mapping customized fields.
+4. **`products`**: Product specifications, catalog images, and rating metrics.
+5. **`orders`**: Timeline history logs, quoted prices, and item configurations.
+6. **`reviews`**: Verified buyer feedback, ratings, and attachments.
+7. **`testimonials`**: Featured social proof logs sorted by display priority.
+
+### 2.2 Database Indexes
+To maintain optimal search performance and unique validation rules, the following indexes are generated:
+- **`reviews`**:
+  - `product_id` (ascending index)
+  - `is_approved` (ascending index)
+  - `(user_id, order_id)` (compound unique index preventing duplicate reviews)
+- **`testimonials`**:
+  - `(is_active, display_order)` (compound sorting index)
+
+---
+
+## 3. API Contract Documentation
+
+All endpoints return standardized JSON structures conforming to the following contracts:
+
+### 3.1 Authentication Endpoints
+- **`POST /api/auth/register`**: Register a new user.
+- **`POST /api/auth/login`**: Authenticate client and set refresh token cookie.
+- **`POST /api/auth/refresh`**: Silent access token regeneration.
+- **`POST /api/auth/logout`**: Revoke and clear browser cookies.
+
+### 3.2 Product Catalog & Configurator
+- **`GET /api/categories`**: Fetch active signages and quilled art folders.
+- **`GET /api/products`**: Fetch products with search and category filtering.
+- **`GET /api/products/<slug>`**: Retrieve detailed configuration settings.
+- **`POST /api/configurator/price`**: Calculate base price plus attribute variations.
+
+### 3.3 Shopping Cart & Checkout
+- **`GET /api/cart`**: Retrieve active selections and warning logs.
+- **`POST /api/cart/items`**: Add item configurations to cart.
+- **`DELETE /api/cart/items/<id>`**: Remove item from cart.
+- **`POST /api/orders/checkout`**: Submit order inquiry.
+
+### 3.4 Reviews & Testimonials
+- **`GET /api/products/<id>/reviews`**: Retrieve approved customer feedback.
+- **`POST /api/products/<id>/reviews`**: Submit review (verified delivered purchase required).
+- **`GET /api/testimonials`**: Retrieve active testimonials.
+
+### 3.5 Administrative Portal
+- **`GET /api/admin/reviews`**: View pending approval queue.
+- **`PUT /api/admin/reviews/<id>/approve`**: Approve submission and update rating rollups.
+- **`PUT /api/admin/reviews/<id>/reject`**: Log rejection feedback.
+- **`POST /api/admin/reviews/<id>/promote-to-testimonial`**: Convert approved review to testimonial.
+- **`PUT /api/admin/orders/<id>/quote`**: Apply final quoted price.
+- **`PUT /api/admin/orders/<id>/status`**: Transition milestone status.
+
+---
+
+## 4. Installation & Setup Guide
+
+### 4.1 Backend Setup
+1. Navigate to `/backend` directory.
+2. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Setup environmental variables in `/backend/.env`:
+   ```env
+   ENV=development
+   MONGO_URI=mongodb://localhost:27017/galxy
+   JWT_SECRET=super-secret-dev-key
+   GEMINI_API_KEY=your_gemini_api_key
+   ```
+4. Seed mock categories, admin logins, and products:
+   ```bash
+   python seed.py
+   ```
+5. Start backend api:
+   ```bash
+   python run.py
+   ```
+
+### 4.2 Frontend Setup
+1. Navigate to `/frontend` directory.
+2. Restore package dependencies:
+   ```bash
+   npm install
+   ```
+3. Run the development server:
+   ```bash
+   npm run dev
+   ```
+   Open `http://localhost:3000` to interact with the storefront.
+
+---
+
+## 5. Deployment Guide
+
+### 5.1 Backend Production
+- Run Flask behind a WSGI server like **Gunicorn** or **uWSGI**:
+  ```bash
+  gunicorn -w 4 -b 0.0.0.0:5000 run:app
+  ```
+- Reverse proxy API routes using Nginx to handle SSL and header routing.
+
+### 5.2 Frontend Production
+- Deploy Next.js onto **Vercel** or compile locally:
+  ```bash
+  npm run build
+  ```
+  ```bash
+  npm run start
+  ```

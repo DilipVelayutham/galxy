@@ -1,28 +1,18 @@
 import logging
-from pymongo import MongoClient, ASCENDING
-from pymongo.errors import ConnectionFailure
+from app.db import db as main_db
 
 logger = logging.getLogger(__name__)
 
 class Database:
     def __init__(self):
-        self.client = None
-        self.db = None
+        # Delegate directly to the main database client and instance
+        self.client = main_db.client
+        self.db = main_db
 
     def init_app(self, app):
         """Initializes the database client using app configuration."""
-        mongo_uri = app.config.get("MONGO_URI", "mongodb://localhost:27017")
-        db_name = app.config.get("DATABASE_NAME", "asil_artisan")
-
-        try:
-            self.client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
-            self.client.admin.command('ping')
-            self.db = self.client[db_name]
-            logger.info("Connected to MongoDB successfully.")
-            self.create_required_indexes()
-        except ConnectionFailure as e:
-            logger.error(f"Failed to connect to MongoDB: {e}")
-            raise e
+        # Main db is statically initialized on import, so we only run index creation here
+        self.create_required_indexes()
 
     def create_required_indexes(self):
         """Creates indexes for reviews and testimonials collections."""
@@ -31,6 +21,7 @@ class Database:
             return
 
         try:
+            from pymongo import ASCENDING
             # Reviews collection indexes
             reviews = self.db["reviews"]
             reviews.create_index([("product_id", ASCENDING)])

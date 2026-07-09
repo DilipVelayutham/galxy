@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0B0B0F;
+  --foreground: #F4F4F7;
+  
+  --void-black: #0B0B0F;
+  --panel-charcoal: #16161C;
+  --neon-pink: #FF2E8A;
+  --neon-blue: #18E7FF;
+  --neon-violet: #9B5CFF;
+  --neon-yellow: #FFD84D;
+  --text-primary: #F4F4F7;
+  --text-muted: #8A8A97;
+}
+
+@theme {
+  --color-void-black: var(--void-black);
+  --color-panel-charcoal: var(--panel-charcoal);
+  --color-neon-pink: var(--neon-pink);
+  --color-neon-blue: var(--neon-blue);
+  --color-neon-violet: var(--neon-violet);
+  --color-neon-yellow: var(--neon-yellow);
+  --color-text-primary: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+}
+
+body {
+  background-color: var(--void-black);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom Neon Glow Utilities */
+.glow-pink {
+  box-shadow: 0 0 15px rgba(255, 46, 138, 0.3), 0 0 30px rgba(255, 46, 138, 0.1);
+}
+.glow-pink-hover:hover {
+  box-shadow: 0 0 25px rgba(255, 46, 138, 0.5), 0 0 50px rgba(255, 46, 138, 0.2);
+  transition: all 0.3s ease-out;
+}
+
+.glow-blue {
+  box-shadow: 0 0 15px rgba(24, 231, 255, 0.3), 0 0 30px rgba(24, 231, 255, 0.1);
+}
+.glow-blue-hover:hover {
+  box-shadow: 0 0 25px rgba(24, 231, 255, 0.5), 0 0 50px rgba(24, 231, 255, 0.2);
+  transition: all 0.3s ease-out;
+}
+
+.glow-violet {
+  box-shadow: 0 0 15px rgba(155, 92, 255, 0.3), 0 0 30px rgba(155, 92, 255, 0.1);
+}
+.glow-violet-hover:hover {
+  box-shadow: 0 0 25px rgba(155, 92, 255, 0.5), 0 0 50px rgba(155, 92, 255, 0.2);
+  transition: all 0.3s ease-out;
+}
+
+.glow-yellow {
+  box-shadow: 0 0 15px rgba(255, 216, 77, 0.3), 0 0 30px rgba(255, 216, 77, 0.1);
+}
+.glow-yellow-hover:hover {
+  box-shadow: 0 0 25px rgba(255, 216, 77, 0.5), 0 0 50px rgba(255, 216, 77, 0.2);
+  transition: all 0.3s ease-out;
+}
+
+/* Neon Text Glows */
+.text-glow-pink {
+  text-shadow: 0 0 10px rgba(255, 46, 138, 0.8), 0 0 20px rgba(255, 46, 138, 0.4);
+}
+.text-glow-blue {
+  text-shadow: 0 0 10px rgba(24, 231, 255, 0.8), 0 0 20px rgba(24, 231, 255, 0.4);
+}
+.text-glow-violet {
+  text-shadow: 0 0 10px rgba(155, 92, 255, 0.8), 0 0 20px rgba(155, 92, 255, 0.4);
+}
+.text-glow-yellow {
+  text-shadow: 0 0 10px rgba(255, 216, 77, 0.8), 0 0 20px rgba(255, 216, 77, 0.4);
+}
+
+/* Glassmorphism Panel */
+.glass-panel {
+  background: rgba(22, 22, 28, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(244, 244, 247, 0.05);
+}
+
+/* Neon Glow Gradient Border */
+.neon-border-hover {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: border 0.3s ease;
+}
+.neon-border-hover:hover {
+  border-color: transparent;
+  background-image: linear-gradient(var(--panel-charcoal), var(--panel-charcoal)), linear-gradient(45deg, var(--neon-pink), var(--neon-blue), var(--neon-violet));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+/* Animated Neon Flicker-on */
+@keyframes flicker {
+  0%, 18%, 22%, 25%, 53%, 57%, 100% {
+    text-shadow: 0 0 4px #fff, 0 0 11px currentColor, 0 0 19px currentColor, 0 0 40px currentColor;
+    opacity: 1;
+  }
+  20%, 24%, 55% {
+    text-shadow: none;
+    opacity: 0.3;
+  }
+}
+.animate-flicker {
+  animation: flicker 2s infinite alternate;
+}
+.animate-flicker-once {
+  animation: flicker 1.2s ease-out 1 forwards;
+}
+
+/* Scrollbar Style */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--void-black);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--panel-charcoal);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neon-blue);
+}
+
+/* Star Rating Glow Pulse Feedback Animation */
+@keyframes star-pulse {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 2px var(--neon-yellow));
+  }
+  50% {
+    transform: scale(1.3);
+    filter: drop-shadow(0 0 15px var(--neon-yellow)) drop-shadow(0 0 25px var(--neon-yellow));
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 8px var(--neon-yellow));
+  }
+}
+
+.animate-star-pulse {
+  animation: star-pulse 0.35s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}

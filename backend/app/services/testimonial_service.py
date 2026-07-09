@@ -173,3 +173,76 @@ def promote_review_to_testimonial(review_id, review_data, customer_location=None
     }
     
     return create_testimonial(testimonial_payload)
+
+
+class TestimonialService:
+    """
+    Backwards-compatible wrapper class for other backend services.
+    """
+    @staticmethod
+    def get_active_testimonials():
+        collection = db.get_collection("testimonials")
+        if collection is None:
+            return []
+        docs = list(collection.find({"is_active": True}).sort("display_order", 1))
+        return serialize_docs(docs)
+
+    @staticmethod
+    def promote_from_review(review_id_str, customer_location="Chennai", display_order=0):
+        # Fetch the review from the reviews collection
+        reviews_collection = db.get_collection("reviews")
+        if reviews_collection is None:
+            return None, "Reviews collection not found"
+        try:
+            review = reviews_collection.find_one({"_id": ObjectId(review_id_str)})
+        except Exception as e:
+            return None, f"Invalid ID format: {str(e)}"
+            
+        if not review:
+            return None, "Review not found"
+            
+        if not review.get("is_approved"):
+            return None, "Cannot promote unapproved review"
+            
+        try:
+            res = promote_review_to_testimonial(ObjectId(review_id_str), review, customer_location, display_order)
+            return res, None
+        except Exception as e:
+            return None, str(e)
+
+    @staticmethod
+    def create_manual_testimonial(name, quote, location="", rating=5, image=None, display_order=0, is_active=True):
+        payload = {
+            "customer_name": name,
+            "quote": quote,
+            "customer_location": location,
+            "rating": rating,
+            "image": image,
+            "display_order": display_order,
+            "is_active": is_active,
+            "source": "manual",
+            "review_id": None
+        }
+        return create_testimonial(payload)
+
+    @staticmethod
+    def update_testimonial(testimonial_id_str, data):
+        try:
+            update_testimonial(testimonial_id_str, data)
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def delete_testimonial(testimonial_id_str):
+        try:
+            return delete_testimonial(testimonial_id_str)
+        except Exception:
+            return False
+
+    @staticmethod
+    def reorder_testimonials(reorder_items):
+        try:
+            return reorder_testimonials(reorder_items)
+        except Exception:
+            return False

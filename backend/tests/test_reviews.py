@@ -320,4 +320,3 @@ def test_submit_review_integration_invalid_return_format(client, db, monkeypatch
     data = json.loads(response.data)
     assert data["success"] is False
     assert "Invalid response format" in data["message"]
-

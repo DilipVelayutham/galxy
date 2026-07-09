@@ -1,20 +1,31 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 class Config:
-    FLASK_ENV = os.environ.get("FLASK_ENV", "development")
-    DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
-    SECRET_KEY = os.environ.get("SECRET_KEY", "reviews_backend_secret_key_999")
-    
-    # MongoDB Configuration
-    MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/reviews_db")
-    DB_NAME = os.environ.get("DB_NAME", "reviews_db")
-    
-    # JWT Configuration
-    JWT_SECRET = os.environ.get("JWT_SECRET", "default_jwt_secret_key_12345")
-    JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
-    
+    ENV = os.environ.get("ENV", "development")
+    DEBUG = ENV == "development"
     PORT = int(os.environ.get("PORT", 5000))
+    
+    # MongoDB Config
+    MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/galxy")
+    DATABASE_NAME = "galxy"
+    
+    # JWT Config
+    JWT_SECRET = os.environ.get("JWT_SECRET", "super-secret-dev-key")
+    ACCESS_TOKEN_EXPIRE_MINUTES = 15
+    REFRESH_TOKEN_EXPIRE_DAYS = 7
+    
+    # Cloudinary Config
+    CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+    CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
+    CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
+    
+    # Gemini API Config
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+    # Mapped values for target/develop compatibility
+    FLASK_ENV = ENV
+    FLASK_DEBUG = DEBUG
+    JWT_ALGORITHM = "HS256"

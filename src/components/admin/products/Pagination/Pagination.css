@@ -1,0 +1,137 @@
+/* ============================================
+   Pagination - Page navigation controls
+   ============================================ */
+
+.pagination-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: rgba(22, 22, 28, 0.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0 0 16px 16px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+/* ---- Results Info ---- */
+.pagination-info {
+  flex-shrink: 0;
+}
+
+.pagination-results {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.pagination-results strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ---- Controls ---- */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---- Buttons ---- */
+.pagination-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  padding: 0 8px;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: rgba(255, 46, 138, 0.1);
+  border-color: rgba(255, 46, 138, 0.3);
+  color: var(--text-primary);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pagination-btn-page.active {
+  background: linear-gradient(135deg, var(--color-primary), #D41B6E);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 16px rgba(255, 46, 138, 0.3);
+}
+
+.pagination-btn-nav {
+  font-size: 16px;
+}
+
+.pagination-ellipsis {
+  color: var(--text-muted);
+  padding: 0 4px;
+  font-size: 14px;
+  user-select: none;
+}
+
+/* ---- Page Size Selector ---- */
+.pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pagination-size-label {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.pagination-size-select {
+  padding: 6px 32px 6px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  min-width: 65px;
+  background-color: var(--bg-surface);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .pagination-container {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .pagination-info {
+    order: 3;
+  }
+
+  .pagination-size {
+    order: 2;
+  }
+}
+
+@media (max-width: 480px) {
+  .pagination-btn {
+    min-width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+}

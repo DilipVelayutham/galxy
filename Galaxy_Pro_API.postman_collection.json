@@ -1,0 +1,392 @@
+{
+  "info": {
+    "name": "Galaxy Pro — Products API",
+    "description": "Complete API collection for the Galaxy Pro products backend.\n\nBase URL: http://localhost:5000\n\n## Endpoints\n- Health Check\n- List Products (with filters)\n- Search Products\n- Get Product Detail\n- Create Product\n- Update Product\n- Delete Product (soft-delete)\n- Upload Image\n- Delete Image",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "product_slug",
+      "value": "sample-neon-sign",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🩺 Health Check",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health"]
+            },
+            "description": "Quick health check to verify the server is running.\n\nExpected: `{ \"success\": true, \"module\": \"products\", \"status\": \"ok\" }`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "📦 Products — Public (Storefront)",
+      "item": [
+        {
+          "name": "List All Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products"]
+            },
+            "description": "GET /api/products\n\nReturns a paginated, lightweight list of all active products.\nNo filters applied — returns all products."
+          }
+        },
+        {
+          "name": "List Products — With Filters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products?category=neon-signs&min_price=100&max_price=5000&featured=true&sort=newest&page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products"],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "neon-signs",
+                  "description": "Category slug (exact match)"
+                },
+                {
+                  "key": "min_price",
+                  "value": "100",
+                  "description": "Inclusive lower bound on base_price"
+                },
+                {
+                  "key": "max_price",
+                  "value": "5000",
+                  "description": "Inclusive upper bound on base_price"
+                },
+                {
+                  "key": "tags",
+                  "value": "wedding,party",
+                  "description": "Comma-separated tags (matches any)",
+                  "disabled": true
+                },
+                {
+                  "key": "featured",
+                  "value": "true",
+                  "description": "Filter featured products (true/false)"
+                },
+                {
+                  "key": "sort",
+                  "value": "newest",
+                  "description": "Sort: newest | price_asc | price_desc | popular"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Page size (default 20)"
+                }
+              ]
+            },
+            "description": "GET /api/products with all available query filters.\n\nDisable/enable individual query params to test different filter combinations."
+          }
+        },
+        {
+          "name": "List Products — By Category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products?category=neon-signs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products"],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "neon-signs",
+                  "description": "Category slug"
+                }
+              ]
+            },
+            "description": "Filter products by category slug only."
+          }
+        },
+        {
+          "name": "List Products — Price Range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products?min_price=500&max_price=2000&sort=price_asc",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products"],
+              "query": [
+                {
+                  "key": "min_price",
+                  "value": "500"
+                },
+                {
+                  "key": "max_price",
+                  "value": "2000"
+                },
+                {
+                  "key": "sort",
+                  "value": "price_asc"
+                }
+              ]
+            },
+            "description": "Filter products by price range, sorted by price ascending."
+          }
+        },
+        {
+          "name": "Search Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products/search?q=neon&page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "neon",
+                  "description": "Search query (min 2 characters)"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "GET /api/products/search?q=<query>\n\nFull-text search across title + description + tags.\nQuery must be at least 2 characters."
+          }
+        },
+        {
+          "name": "Get Product Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products/{{product_slug}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "{{product_slug}}"]
+            },
+            "description": "GET /api/products/<slug>\n\nReturns the full product document with the owning category embedded inline.\nAlso increments the `views` counter by 1.\n\nChange the `product_slug` variable to test different products."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔧 Products — Admin / Internal",
+      "item": [
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category_id\": \"PASTE_CATEGORY_OBJECTID_HERE\",\n  \"category_slug\": \"neon-signs\",\n  \"title\": \"Custom Galaxy Neon Sign\",\n  \"type\": \"pre_designed\",\n  \"base_price\": 1299,\n  \"description\": \"A stunning galaxy-themed neon sign perfect for home decor and gifting.\",\n  \"thumbnail\": \"\",\n  \"images\": [],\n  \"specifications\": {\n    \"material\": \"Flex LED Neon\",\n    \"power\": \"12V Adapter\",\n    \"size\": \"12x18 inches\",\n    \"lifespan\": \"50,000+ hours\"\n  },\n  \"default_attributes\": {\n    \"color\": \"Warm White\",\n    \"backing\": \"Acrylic\"\n  },\n  \"stock_status\": \"in_stock\",\n  \"tags\": [\"galaxy\", \"neon\", \"home-decor\", \"gift\"],\n  \"is_featured\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/products",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products"]
+            },
+            "description": "POST /api/products\n\nCreate a new product.\n\n**Required fields:**\n- `category_id` — MongoDB ObjectId string of the parent category\n- `title` — Product title\n- `type` — `pre_designed` or `fully_custom`\n- `base_price` — Number >= 0\n\n**Optional fields:**\n- `category_slug`, `description`, `thumbnail`, `images[]`, `specifications{}`, `default_attributes{}`, `stock_status`, `tags[]`, `is_featured`\n\n⚠️ Replace `PASTE_CATEGORY_OBJECTID_HERE` with an actual ObjectId from your categories collection."
+          }
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Galaxy Neon Sign — Limited Edition\",\n  \"base_price\": 1599,\n  \"is_featured\": true,\n  \"tags\": [\"galaxy\", \"neon\", \"limited-edition\", \"gift\"],\n  \"stock_status\": \"in_stock\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/products/{{product_slug}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "{{product_slug}}"]
+            },
+            "description": "PUT /api/products/<slug>\n\nPartial update — only fields present in the JSON body are changed.\nYou do NOT need to send the full document.\n\nUpdate the `product_slug` collection variable to target different products."
+          }
+        },
+        {
+          "name": "Delete Product (Soft Delete)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products/{{product_slug}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "{{product_slug}}"]
+            },
+            "description": "DELETE /api/products/<slug>\n\nSoft-delete: sets `is_active = false`.\nThe product will no longer appear in list/search results but is NOT physically removed from the database."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🖼️ Product Images",
+      "item": [
+        {
+          "name": "Upload Image",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Image file to upload (JPEG, PNG, WebP)"
+                },
+                {
+                  "key": "is_thumbnail",
+                  "value": "false",
+                  "type": "text",
+                  "description": "Set to 'true' to upload as thumbnail"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/products/{{product_slug}}/images",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "{{product_slug}}", "images"]
+            },
+            "description": "POST /api/products/<slug>/images\n\nMultipart form upload.\n\n**Fields:**\n- `file` — Image file (required). Click 'Select Files' in Postman.\n- `is_thumbnail` — `true` or `false` (optional, default false)\n\n**Returns:** Cloudinary `secure_url` and `public_id`.\n\nAfter uploading, use the PUT endpoint to add the returned URL to the product's `images[]` array or `thumbnail` field."
+          }
+        },
+        {
+          "name": "Upload Thumbnail",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Thumbnail image file"
+                },
+                {
+                  "key": "is_thumbnail",
+                  "value": "true",
+                  "type": "text",
+                  "description": "Set to true for thumbnail upload"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/products/{{product_slug}}/images",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "{{product_slug}}", "images"]
+            },
+            "description": "POST /api/products/<slug>/images with is_thumbnail=true\n\nSame endpoint as image upload, but flags the upload as a thumbnail for Cloudinary transformations."
+          }
+        },
+        {
+          "name": "Delete Image (by public_id)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"public_id\": \"products/sample-neon-sign/abc123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/products/{{product_slug}}/images",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "{{product_slug}}", "images"]
+            },
+            "description": "DELETE /api/products/<slug>/images\n\nDelete an image from Cloudinary using its `public_id`.\nGet the `public_id` from the upload response or from the product document."
+          }
+        },
+        {
+          "name": "Delete Image (by URL)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://res.cloudinary.com/your-cloud/image/upload/v1234/products/sample-neon-sign/abc123.jpg\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/products/{{product_slug}}/images",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "{{product_slug}}", "images"]
+            },
+            "description": "DELETE /api/products/<slug>/images\n\nAlternative: delete an image by passing its full Cloudinary URL instead of the public_id.\nThe server will extract the public_id from the URL automatically."
+          }
+        }
+      ]
+    }
+  ]
+}

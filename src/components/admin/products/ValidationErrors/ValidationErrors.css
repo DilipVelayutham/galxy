@@ -1,0 +1,28 @@
+/* ============================================
+   ValidationErrors - Inline form error messages
+   ============================================ */
+
+.validation-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.validation-error-icon {
+  color: #EF4444;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.validation-error-text {
+  color: #EF4444;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}

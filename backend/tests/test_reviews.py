@@ -5,7 +5,7 @@ from datetime import datetime
 from bson import ObjectId
 from flask import g
 from app import create_app
-from app.config import Config
+from app.configs.env_config import Config
 from app.db import init_db, get_db, get_reviews_col
 from app.services.rating_rollup_service import RatingRollupService
 

@@ -1,7 +1,33 @@
-# Byte-compiled / optimized / DLL files
+# Common Python ignores
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
+*.pyo
+*.pyd
+
+# Environments
+.env
+.env.*
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Pytest / coverage
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.htmlcov/
 
 # Distribution / packaging
 build/
@@ -21,24 +47,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 
-# Pytest / coverage
-.pytest_cache/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.htmlcov/
+# IDE / editor folders
+.idea/
+.vscode/
 
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# OS files
+.DS_Store
+Thumbs.db

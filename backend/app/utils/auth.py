@@ -1,7 +1,7 @@
 from functools import wraps
 import jwt
 from flask import request, jsonify, g
-from app.config import Config
+from app.configs.env_config import Config
 from bson import ObjectId
 
 def decode_token(token):

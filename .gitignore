@@ -13,6 +13,13 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+env/
+ENV/
+build/
+.eggs/
+*.egg-info/
+dist/
+*.egg
 
 # Environment files containing secrets
 .env
@@ -20,6 +27,7 @@ venv/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*
 
 # IDE & Editor files
 .vscode/

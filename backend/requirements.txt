@@ -4,6 +4,7 @@ flask-cors==4.0.1
 
 # Database
 pymongo==4.7.2
+dnspython
 
 # JWT
 PyJWT==2.8.0
@@ -13,3 +14,4 @@ python-dotenv==1.0.1
 
 # Testing
 pytest==8.2.2
+mongomock

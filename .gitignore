@@ -1,0 +1,37 @@
+# environment files - never commit real credentials
+.env
+.env.local
+.env.*.local
+
+# python / flask
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+instance/
+
+# node / next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# logs & OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/
+
+# Ignore Word documents
+*.docx
+*.pdf
+.pdf
+
+# developer tools
+dev-tools/

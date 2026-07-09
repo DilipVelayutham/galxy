@@ -15,3 +15,30 @@ pnpm-debug.log*
 .DS_Store
 *.tsbuildinfo
 *.tsbuildinfo*
+
+# Common Python ignores
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+ENV/
+build/
+.eggs/
+*.egg-info/
+dist/
+*.egg
+
+# IDE / editor folders
+.idea/
+.vscode/
+
+# Environment files
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db

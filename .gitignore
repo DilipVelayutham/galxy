@@ -1,0 +1,45 @@
+# Visual Studio Code / IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary unzipped folders
+dev/
+feature-sri/
+
+# Zip packages
+*.zip
+
+# Word docs
+*.docx
+*.pdf
+
+# Python virtual environment
+backend/venv/
+backend/app/db_fallback.json
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/routes/__pycache__/
+backend/app/services/__pycache__/
+backend/app/utils/__pycache__/
+backend/tests/__pycache__/
+.pytest_cache/
+backend/.pytest_cache/
+
+# Node.js dependencies & builds
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+.env*.local
+frontend/.env*.local
+
+# System files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store

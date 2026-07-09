@@ -1,83 +1,127 @@
-# app/routes/admin_review_routes.py
-from flask import Blueprint, request, jsonify, g
-from app.middleware.auth import require_admin
+from flask import Blueprint, request, jsonify
+from app.utils.auth import token_required, role_required
 from app.services.review_service import ReviewService
-from app.services.testimonial_service import TestimonialService
 
 admin_review_bp = Blueprint("admin_reviews", __name__)
 
 @admin_review_bp.route("/reviews", methods=["GET"])
-@require_admin
+@token_required
+@role_required(["admin", "super_admin"])
 def get_admin_reviews():
-    is_approved_str = request.args.get("is_approved")
-    product_id_str = request.args.get("product_id")
-    page = request.args.get("page", 1, type=int)
-    limit = request.args.get("limit", 20, type=int)
+    """
+    GET /api/admin/reviews
+    Retrieves all reviews for admin moderation.
+    Supports query parameters: is_approved, product_id, page, limit
+    """
+    is_approved = request.args.get("is_approved")
+    product_id = request.args.get("product_id")
+    page = request.args.get("page", 1)
+    limit = request.args.get("limit", 20)
     
-    is_approved_bool = None
-    if is_approved_str is not None:
-        is_approved_bool = is_approved_str.lower() == "true"
+    # Safely convert page and limit
+    try:
+        page = int(page)
+    except ValueError:
+        page = 1
         
-    reviews, total, total_pages = ReviewService.get_admin_reviews(
-        is_approved_bool, product_id_str, page, limit
+    try:
+        limit = int(limit)
+    except ValueError:
+        limit = 20
+        
+    result, status_code = ReviewService.get_admin_reviews(
+        is_approved=is_approved,
+        product_id=product_id,
+        page=page,
+        limit=limit
     )
-    
-    return jsonify({
-        "success": True,
-        "data": reviews,
-        "page": page,
-        "limit": limit,
-        "total": total,
-        "totalPages": total_pages
-    }), 200
+    return jsonify(result), status_code
+
 
 @admin_review_bp.route("/reviews/<id>/approve", methods=["PUT"])
-@require_admin
+@token_required
+@role_required(["admin", "super_admin"])
 def approve_review(id):
-    updated_review, err = ReviewService.approve_review(id)
-    if err:
-        return jsonify({"success": False, "message": err}), 404
-        
-    return jsonify({
-        "success": True,
-        "message": "Review approved successfully",
-        "data": updated_review
-    }), 200
+    """
+    PUT /api/admin/reviews/:id/approve
+    Approves a review, setting is_approved = true and triggering rating rollup.
+    """
+    result, status_code = ReviewService.approve_review(id)
+    return jsonify(result), status_code
+
 
 @admin_review_bp.route("/reviews/<id>/reject", methods=["PUT"])
-@require_admin
+@token_required
+@role_required(["admin", "super_admin"])
 def reject_review(id):
-    data = request.get_json() or {}
-    reason = data.get("reason", "")
-    
-    success, err = ReviewService.reject_review(id, reason)
-    if not success:
-        return jsonify({"success": False, "message": err}), 404
+    """
+    PUT /api/admin/reviews/:id/reject
+    Rejects a review, saving optional reason and triggering rollup if needed.
+    """
+    # Accept optional reason from request body
+    reason = None
+    if request.is_json:
+        data = request.get_json() or {}
+        reason = data.get("reason")
+    else:
+        reason = request.form.get("reason")
         
-    return jsonify({"success": True, "message": "Review rejected successfully"}), 200
+    result, status_code = ReviewService.reject_review(id, reason=reason)
+    return jsonify(result), status_code
+
 
 @admin_review_bp.route("/reviews/<id>", methods=["DELETE"])
-@require_admin
+@token_required
+@role_required(["admin", "super_admin"])
 def delete_review(id):
-    success, err = ReviewService.delete_review(id)
-    if not success:
-        return jsonify({"success": False, "message": err}), 404
-        
-    return jsonify({"success": True, "message": "Review hard deleted successfully"}), 200
+    """
+    DELETE /api/admin/reviews/:id
+    Hard-deletes a review, triggering rollup if necessary.
+    """
+    result, status_code = ReviewService.delete_review(id)
+    return jsonify(result), status_code
+
 
 @admin_review_bp.route("/reviews/<id>/promote-to-testimonial", methods=["POST"])
-@require_admin
+@token_required
+@role_required(["admin", "super_admin"])
 def promote_to_testimonial(id):
-    data = request.get_json() or {}
-    location = data.get("customer_location", "Chennai")
-    display_order = data.get("display_order", 0)
+    """
+    POST /api/admin/reviews/:id/promote-to-testimonial
+    Promotes an approved review to a testimonial.
+    """
+    customer_location = "Verified Buyer"
+    display_order = 0
     
-    new_testimonial, err = TestimonialService.promote_from_review(id, location, display_order)
-    if err:
-        return jsonify({"success": False, "message": err}), 400
-        
-    return jsonify({
-        "success": True,
-        "message": "Review promoted to testimonial successfully",
-        "data": new_testimonial
-    }), 201
+    if request.is_json:
+        data = request.get_json() or {}
+        customer_location = data.get("customer_location", "Verified Buyer")
+        display_order = data.get("display_order", 0)
+    else:
+        customer_location = request.form.get("customer_location", "Verified Buyer")
+        display_order = request.form.get("display_order", 0)
+
+    errors = {}
+    if not isinstance(customer_location, str) or len(customer_location.strip()) < 1 or len(customer_location.strip()) > 100:
+        errors["customer_location"] = "Customer location must be a string between 1 and 100 characters."
+
+    try:
+        display_order_val = int(display_order)
+        if display_order_val < 0:
+            errors["display_order"] = "Display order must be a non-negative integer."
+    except (ValueError, TypeError):
+        errors["display_order"] = "Display order must be an integer."
+
+    if errors:
+        return jsonify({
+            "success": False,
+            "message": "Validation failed",
+            "errors": errors
+        }), 400
+
+    result, status_code = ReviewService.promote_to_testimonial(
+        review_id=id,
+        customer_location=customer_location,
+        display_order=int(display_order)
+    )
+    return jsonify(result), status_code

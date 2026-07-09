@@ -10,6 +10,7 @@ class Config:
     
     # MongoDB Config
     MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017/galxy")
+    DATABASE_NAME = "galxy"
     
     # JWT Config
     JWT_SECRET = os.environ.get("JWT_SECRET", "super-secret-dev-key")
@@ -23,3 +24,8 @@ class Config:
     
     # Gemini API Config
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+    # Mapped values for target/develop compatibility
+    FLASK_ENV = ENV
+    FLASK_DEBUG = DEBUG
+    JWT_ALGORITHM = "HS256"

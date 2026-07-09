@@ -2,7 +2,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 
 from app.configs.env_config import Config
-from app.database.db import db
+from app.database.db import db as mongo_db
 
 def create_app(config_class=Config):
     """Application factory for the GALXY backend."""
@@ -18,7 +18,7 @@ def create_app(config_class=Config):
     # Avoid initializing if we're in mock-test environment or db is bypassed
     if not app.config.get("TESTING"):
         try:
-            db.init_app(app)
+            mongo_db.init_app(app)
         except Exception as e:
             app.logger.error(f"Failed to initialize database: {e}")
 
@@ -63,15 +63,15 @@ def create_app(config_class=Config):
     
     @app.route("/api/health", methods=["GET"])
     def health():
-        return success_response({"status": "ok"}, "Galxy Testimonials sub-module is running.")
+        return success_response({"status": "ok"}, "Galxy Reviews & Testimonials backend is running.")
 
     # Original /health check doing a DB ping
     @app.route("/health")
     def health_check():
         try:
             # Quick database ping using initialized client
-            if db.client:
-                db.client.admin.command("ping")
+            if mongo_db.client:
+                mongo_db.client.admin.command("ping")
                 return jsonify({"success": True, "message": "Server is healthy", "database": "connected"}), 200
             else:
                 return jsonify({"success": False, "message": "Database not initialized"}), 500

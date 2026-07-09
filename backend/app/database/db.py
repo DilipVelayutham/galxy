@@ -15,14 +15,25 @@ class Database:
         self.create_required_indexes()
 
     def create_required_indexes(self):
-        """Creates indexes for testimonials collection to optimize query performance."""
+        """Creates indexes for reviews and testimonials collections."""
         if self.db is None:
             logger.warning("Database not initialized, skipping index creation.")
             return
 
         try:
-            testimonials = self.db["testimonials"]
             from pymongo import ASCENDING
+            # Reviews collection indexes
+            reviews = self.db["reviews"]
+            reviews.create_index([("product_id", ASCENDING)])
+            reviews.create_index([("is_approved", ASCENDING)])
+            reviews.create_index([("user_id", ASCENDING), ("order_id", ASCENDING)])
+            reviews.create_index([("created_at", ASCENDING)])
+            logger.info("Database indexes for reviews created successfully.")
+            
+            # Testimonials collection indexes
+            testimonials = self.db["testimonials"]
+            testimonials.create_index([("is_active", ASCENDING)])
+            testimonials.create_index([("display_order", ASCENDING)])
             testimonials.create_index([("is_active", ASCENDING), ("display_order", ASCENDING)])
             logger.info("Database indexes for testimonials created successfully.")
         except Exception as e:

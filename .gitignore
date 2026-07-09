@@ -4,8 +4,10 @@ node_modules/
 # Next.js build output
 .next/
 out/
+dist/
+build/
 
-# Python cache & compiler output
+# Common Python ignores
 __pycache__/
 *.pyc
 *.pyo
@@ -15,11 +17,20 @@ __pycache__/
 venv/
 env/
 ENV/
-build/
-.eggs/
-*.egg-info/
-dist/
-*.egg
+env.bak/
+venv.bak/
+
+# Pytest / coverage
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.htmlcov/
 
 # Environment files containing secrets
 .env
@@ -37,6 +48,8 @@ dist/
 *.njsproj
 *.sln
 *.swp
+*.tsbuildinfo
+*.tsbuildinfo*
 
 # OS temporary files
 .DS_Store

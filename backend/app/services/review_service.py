@@ -1,168 +1,404 @@
-# app/services/review_service.py
-import datetime
 from bson import ObjectId
-from app.db import db
-from app.services.order_service import OrderService
+from datetime import datetime
+from flask import g
+from app.db import get_db, get_reviews_col
+from app.models.review import ReviewModel
 from app.services.rating_rollup_service import RatingRollupService
+
+# Import order_service (Module 8)
+try:
+    from app.services.order_service import order_service
+except ImportError:
+    order_service = None
+
+# Import image upload helper (Module 10)
+upload_image = None
+try:
+    from app.utils.upload import upload_image
+except ImportError:
+    try:
+        from app.services.upload_service import upload_image
+    except ImportError:
+        try:
+            from app.services.cloudinary_service import upload_image
+        except ImportError:
+            pass
+
 
 class ReviewService:
     @staticmethod
-    def get_product_reviews(product_id_str, sort_by="newest", page=1, limit=20):
-        product_id = ObjectId(product_id_str)
-        query = {"product_id": product_id, "is_approved": True}
-        
-        sort_query = [("created_at", -1)]
-        if sort_by == "highest_rated":
-            sort_query = [("rating", -1), ("created_at", -1)]
-        elif sort_by == "lowest_rated":
-            sort_query = [("rating", 1), ("created_at", -1)]
-            
-        total = db.reviews.count_documents(query)
-        reviews = list(
-            db.reviews.find(query)
-            .sort(sort_query)
-            .skip((page - 1) * limit)
-            .limit(limit)
-        )
-        
-        # Format response mapping (no user_id or order_id)
-        formatted = []
-        for rev in reviews:
-            formatted.append({
-                "_id": str(rev["_id"]),
-                "customer_name": rev.get("customer_name", "Anonymous"),
-                "rating": rev["rating"],
-                "comment": rev.get("comment", ""),
-                "images": rev.get("images", []),
-                "created_at": rev["created_at"].isoformat()
-            })
-            
-        total_pages = (total + limit - 1) // limit if total > 0 else 0
-        return formatted, total, total_pages
+    def to_bson_id(val):
+        """Safely convert a value to BSON ObjectId if it is valid."""
+        if isinstance(val, str) and ObjectId.is_valid(val):
+            return ObjectId(val)
+        return val
 
     @staticmethod
-    def create_review(user_id_str, product_id_str, rating, comment, images=None):
-        if images is None:
-            images = []
-            
-        # 1. Gate: Verify delivered purchase via Order Service
-        eligibility = OrderService.has_delivered_order_for_product(user_id_str, product_id_str)
-        if not eligibility.get("eligible"):
-            return None, "not a verified delivered purchase", 403
-            
-        order_id = ObjectId(eligibility["order_id"])
-        order_number = eligibility["order_number"]
-        
-        # 2. Gate: Uniqueness check
-        existing = db.reviews.find_one({
-            "user_id": ObjectId(user_id_str),
-            "product_id": ObjectId(product_id_str),
-            "order_id": order_id
+    def submit_review(product_id, user_id, rating, comment, images=None, customer_name=None):
+        """
+        Submits a new review for a product.
+        Verifies purchase history server-side, duplicate submissions, and stores pending review.
+        """
+        # Check order_service integration
+        if order_service is None:
+            return {
+                "success": False,
+                "message": "Order Service (Module 8) integration error: Service is currently unavailable.",
+                "errors": {}
+            }, 500
+
+        # Check upload_image integration if there are images
+        if images and upload_image is None:
+            return {
+                "success": False,
+                "message": "Image Upload Service (Module 10) integration error: Cloudinary helper is currently unavailable.",
+                "errors": {}
+            }, 500
+
+        # 1. Retrieve review eligibility exclusively by calling order_service
+        try:
+            res = order_service.has_delivered_order_for_product(user_id, product_id)
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Order Service integration call error: {str(e)}",
+                "errors": {}
+            }, 500
+
+        if not res:
+            return {
+                "success": False,
+                "message": "not a verified delivered purchase",
+                "errors": {}
+            }, 403
+
+        # Extract strictly from the documented return structure (dictionary)
+        if not isinstance(res, dict):
+            return {
+                "success": False,
+                "message": "Order Service integration error: Invalid response format.",
+                "errors": {}
+            }, 500
+
+        order_id = res.get("order_id")
+        order_number = res.get("order_number")
+
+        if not order_id or not order_number:
+            return {
+                "success": False,
+                "message": "Order Service integration error: Missing purchase metadata in response.",
+                "errors": {}
+            }, 500
+
+        # 2. Check for duplicate review for this (user_id, product_id, order_id)
+        reviews_col = get_reviews_col()
+        product_oid = ReviewService.to_bson_id(product_id)
+        duplicate = reviews_col.find_one({
+            "user_id": str(user_id),
+            "product_id": product_oid,
+            "order_id": str(order_id)
         })
-        if existing:
-            return None, "You've already reviewed this order's purchase of this product", 409
-            
-        # Fetch user snapshot name
-        user = db.users.find_one({"_id": ObjectId(user_id_str)})
-        customer_name = user["name"] if user else "Verified Buyer"
+        if duplicate:
+            return {
+                "success": False,
+                "message": "You've already reviewed this order's purchase of this product",
+                "errors": {}
+            }, 409
+
+        # 3. Snapshot customer_name from user profile (Module 1)
+        db = get_db()
+        final_customer_name = None
         
-        new_review = {
-            "product_id": ObjectId(product_id_str),
-            "user_id": ObjectId(user_id_str),
-            "order_id": order_id,
-            "order_number": order_number,
-            "rating": int(rating),
-            "comment": comment,
-            "images": images,
-            "customer_name": customer_name,
-            "is_approved": False,
-            "is_featured": False,
-            "created_at": datetime.datetime.utcnow(),
-            "updated_at": datetime.datetime.utcnow()
+        # Try finding the user document in users collection
+        if user_id:
+            user_doc = db["users"].find_one({"_id": ReviewService.to_bson_id(user_id)})
+            if user_doc:
+                final_customer_name = user_doc.get("name") or user_doc.get("customer_name")
+
+        # Fallback chain for customer name
+        if not final_customer_name:
+            final_customer_name = customer_name or getattr(g, "user_name", None) or "Anonymous"
+
+        # 4. Handle review images uploading if they are files
+        uploaded_image_urls = []
+        if images:
+            for img in images:
+                if hasattr(img, "filename") and img.filename:
+                    # It's a file, upload using Module 10 helper
+                    url = upload_image(img)
+                    uploaded_image_urls.append(url)
+                elif isinstance(img, str):
+                    # It's already a URL
+                    uploaded_image_urls.append(img)
+
+        # 5. Save the review as pending
+        review_doc = ReviewModel.create_schema(
+            product_id=product_oid,
+            user_id=user_id,
+            order_id=order_id,
+            order_number=order_number,
+            rating=rating,
+            comment=comment,
+            images=uploaded_image_urls,
+            customer_name=final_customer_name,
+            is_approved=False
+        )
+        
+        res = reviews_col.insert_one(review_doc)
+        
+        return {
+            "success": True,
+            "message": "Review submitted, pending approval",
+            "data": {
+                "id": str(res.inserted_id)
+            }
+        }, 201
+
+    @staticmethod
+    def get_product_reviews(product_id, page=1, limit=20, sort="newest"):
+        """
+        Retrieves public approved reviews for a product with sorting and pagination.
+        Never exposes user_id or order_id.
+        """
+        product_oid = ReviewService.to_bson_id(product_id)
+        reviews_col = get_reviews_col()
+        
+        query = {
+            "product_id": product_oid,
+            "is_approved": True
         }
         
-        res = db.reviews.insert_one(new_review)
-        new_review["_id"] = str(res.inserted_id)
-        new_review["product_id"] = str(new_review["product_id"])
-        new_review["user_id"] = str(new_review["user_id"])
-        new_review["order_id"] = str(new_review["order_id"])
-        new_review["created_at"] = new_review["created_at"].isoformat()
-        new_review["updated_at"] = new_review["updated_at"].isoformat()
+        # Determine sorting fields
+        if sort == "highest_rated":
+            sort_fields = [("rating", -1), ("created_at", -1)]
+        elif sort == "lowest_rated":
+            sort_fields = [("rating", 1), ("created_at", -1)]
+        else: # Default: newest
+            sort_fields = [("created_at", -1)]
+            
+        page = max(1, int(page))
+        limit = max(1, int(limit))
+        skip = (page - 1) * limit
         
-        return new_review, "Review submitted, pending approval", 201
+        # Run query
+        cursor = reviews_col.find(query).sort(sort_fields).skip(skip).limit(limit)
+        reviews = list(cursor)
+        
+        total = reviews_col.count_documents(query)
+        total_pages = (total + limit - 1) // limit if limit > 0 else 0
+        
+        # Serialize reviews using public = True (removes user_id and order_id)
+        serialized_reviews = [ReviewModel.serialize(r, public=True) for r in reviews]
+        
+        return {
+            "success": True,
+            "data": serialized_reviews,
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "totalPages": total_pages
+        }, 200
 
     @staticmethod
-    def get_admin_reviews(is_approved_bool=None, product_id_str=None, page=1, limit=20):
+    def get_admin_reviews(is_approved=None, product_id=None, page=1, limit=20):
+        """
+        Retrieves all reviews for admin moderation with filtering and pagination.
+        """
+        reviews_col = get_reviews_col()
+        
         query = {}
-        if is_approved_bool is not None:
+        
+        # Handle approval filter
+        if is_approved is not None:
+            if isinstance(is_approved, str):
+                is_approved_bool = is_approved.lower() == "true"
+            else:
+                is_approved_bool = bool(is_approved)
             query["is_approved"] = is_approved_bool
-        if product_id_str:
-            query["product_id"] = ObjectId(product_id_str)
             
-        total = db.reviews.count_documents(query)
-        reviews = list(
-            db.reviews.find(query)
-            .sort("created_at", -1)
-            .skip((page - 1) * limit)
-            .limit(limit)
-        )
+        # Handle product filter
+        if product_id:
+            query["product_id"] = ReviewService.to_bson_id(product_id)
+            
+        page = max(1, int(page))
+        limit = max(1, int(limit))
+        skip = (page - 1) * limit
         
-        for rev in reviews:
-            rev["_id"] = str(rev["_id"])
-            rev["product_id"] = str(rev["product_id"])
-            rev["user_id"] = str(rev["user_id"])
-            rev["order_id"] = str(rev["order_id"])
-            rev["created_at"] = rev["created_at"].isoformat()
-            
-        total_pages = (total + limit - 1) // limit if total > 0 else 0
-        return reviews, total, total_pages
+        # Run query (newest reviews first for moderation convenience)
+        cursor = reviews_col.find(query).sort([("created_at", -1)]).skip(skip).limit(limit)
+        reviews = list(cursor)
+        
+        total = reviews_col.count_documents(query)
+        total_pages = (total + limit - 1) // limit if limit > 0 else 0
+        
+        # Serialize reviews using public = False (exposes moderation details)
+        serialized_reviews = [ReviewModel.serialize(r, public=False) for r in reviews]
+        
+        return {
+            "success": True,
+            "data": serialized_reviews,
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "totalPages": total_pages
+        }, 200
 
     @staticmethod
-    def approve_review(review_id_str):
-        review = db.reviews.find_one({"_id": ObjectId(review_id_str)})
+    def approve_review(review_id):
+        """ Approves a pending review and updates the product rollup rating. """
+        reviews_col = get_reviews_col()
+        review_oid = ReviewService.to_bson_id(review_id)
+        
+        review = reviews_col.find_one({"_id": review_oid})
         if not review:
-            return None, "Review not found"
+            return {
+                "success": False,
+                "message": "Review not found.",
+                "errors": {}
+            }, 404
             
-        db.reviews.update_one(
-            {"_id": ObjectId(review_id_str)},
-            {"$set": {"is_approved": True, "updated_at": datetime.datetime.utcnow()}}
+        # Set approved
+        reviews_col.update_one(
+            {"_id": review_oid},
+            {
+                "$set": {
+                    "is_approved": True,
+                    "updated_at": datetime.utcnow()
+                }
+            }
         )
         
-        # Trigger rating rollup
-        RatingRollupService.recalculate_product_rating(str(review["product_id"]))
+        # Recalculate rollup
+        RatingRollupService.recalculate_product_rating(review["product_id"])
         
-        updated = db.reviews.find_one({"_id": ObjectId(review_id_str)})
-        updated["_id"] = str(updated["_id"])
-        updated["product_id"] = str(updated["product_id"])
-        updated["user_id"] = str(updated["user_id"])
-        updated["order_id"] = str(updated["order_id"])
+        # Fetch updated review
+        updated_review = reviews_col.find_one({"_id": review_oid})
         
-        return updated, None
+        return {
+            "success": True,
+            "message": "Review approved successfully",
+            "data": {
+                "review": ReviewModel.serialize(updated_review, public=False)
+            }
+        }, 200
 
     @staticmethod
-    def reject_review(review_id_str, reason=""):
-        review = db.reviews.find_one({"_id": ObjectId(review_id_str)})
+    def reject_review(review_id, reason=None):
+        """ Rejects a review (keeps is_approved=False) and updates rollup if previously approved. """
+        reviews_col = get_reviews_col()
+        review_oid = ReviewService.to_bson_id(review_id)
+        
+        review = reviews_col.find_one({"_id": review_oid})
         if not review:
-            return False, "Review not found"
+            return {
+                "success": False,
+                "message": "Review not found.",
+                "errors": {}
+            }, 404
             
-        db.reviews.update_one(
-            {"_id": ObjectId(review_id_str)},
-            {"$set": {"is_approved": False, "rejected_reason": reason, "updated_at": datetime.datetime.utcnow()}}
+        was_approved = review.get("is_approved", False)
+        
+        # Update review document
+        update_data = {
+            "is_approved": False,
+            "updated_at": datetime.utcnow()
+        }
+        if reason is not None:
+            update_data["rejection_reason"] = str(reason).strip()
+            
+        reviews_col.update_one(
+            {"_id": review_oid},
+            {"$set": update_data}
         )
         
-        # Recalculate rating rollup in case it was previously approved and is now rejected
-        RatingRollupService.recalculate_product_rating(str(review["product_id"]))
-        return True, None
+        # Recalculate rollup if it was previously approved and now rejected
+        if was_approved:
+            RatingRollupService.recalculate_product_rating(review["product_id"])
+            
+        # Fetch updated review
+        updated_review = reviews_col.find_one({"_id": review_oid})
+            
+        return {
+            "success": True,
+            "message": "Review rejected successfully",
+            "data": {
+                "review": ReviewModel.serialize(updated_review, public=False)
+            }
+        }, 200
 
     @staticmethod
-    def delete_review(review_id_str):
-        review = db.reviews.find_one({"_id": ObjectId(review_id_str)})
-        if not review:
-            return False, "Review not found"
-            
-        db.reviews.delete_one({"_id": ObjectId(review_id_str)})
+    def delete_review(review_id):
+        """ Hard-deletes a review from the database. Rollups updated if review was approved. """
+        reviews_col = get_reviews_col()
+        review_oid = ReviewService.to_bson_id(review_id)
         
-        # Trigger rating rollup if review was approved
-        if review.get("is_approved"):
-            RatingRollupService.recalculate_product_rating(str(review["product_id"]))
-        return True, None
+        review = reviews_col.find_one({"_id": review_oid})
+        if not review:
+            return {
+                "success": False,
+                "message": "Review not found.",
+                "errors": {}
+            }, 404
+            
+        was_approved = review.get("is_approved", False)
+        
+        # Hard delete
+        reviews_col.delete_one({"_id": review_oid})
+        
+        # Recalculate rollup if deleted review was approved
+        if was_approved:
+            RatingRollupService.recalculate_product_rating(review["product_id"])
+            
+        return {
+            "success": True,
+            "message": "Review deleted successfully",
+            "data": {}
+        }, 200
+
+    @staticmethod
+    def promote_to_testimonial(review_id, customer_location="Verified Buyer", display_order=0):
+        """ Copies the approved review document fields to the testimonials collection. """
+        reviews_col = get_reviews_col()
+        review_oid = ReviewService.to_bson_id(review_id)
+        
+        review = reviews_col.find_one({"_id": review_oid})
+        if not review:
+            return {
+                "success": False,
+                "message": "Review not found.",
+                "errors": {}
+            }, 404
+            
+        # Only approved reviews may be promoted
+        if not review.get("is_approved", False):
+            return {
+                "success": False,
+                "message": "Only approved reviews can be promoted to testimonials.",
+                "errors": {}
+            }, 400
+            
+        db = get_db()
+        
+        # Testimonial frozen structure
+        testimonial_data = {
+            "customer_name": review.get("customer_name"),
+            "customer_location": str(customer_location).strip(),
+            "quote": review.get("comment"),
+            "rating": int(review.get("rating", 5)),
+            "image": review.get("images")[0] if (review.get("images") and len(review.get("images")) > 0) else "",
+            "source": "review",
+            "review_id": review["_id"],
+            "display_order": int(display_order),
+            "is_active": True,
+            "created_at": datetime.utcnow()
+        }
+        
+        res = db["testimonials"].insert_one(testimonial_data)
+        
+        return {
+            "success": True,
+            "message": "Review successfully promoted to testimonial",
+            "data": {
+                "testimonial_id": str(res.inserted_id)
+            }
+        }, 200

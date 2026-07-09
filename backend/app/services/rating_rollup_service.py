@@ -1,26 +1,41 @@
-# app/services/rating_rollup_service.py
 from bson import ObjectId
-from app.db import db
+from app.db import get_db, get_reviews_col
 
 class RatingRollupService:
     @staticmethod
-    def recalculate_product_rating(product_id_str):
-        product_id = ObjectId(product_id_str)
+    def recalculate_product_rating(product_id):
+        """
+        Recalculates rating_avg and rating_count for the given product.
+        Only fetches approved reviews. Updates the products collection document.
+        """
+        def to_bson_id(val):
+            if isinstance(val, str) and ObjectId.is_valid(val):
+                return ObjectId(val)
+            return val
+
+        product_oid = to_bson_id(product_id)
+        reviews_col = get_reviews_col()
         
-        # Calculate rolls only for approved reviews
-        approved_reviews = list(db.reviews.find({
-            "product_id": product_id,
+        # Fetch only approved reviews for this product
+        approved_reviews = list(reviews_col.find({
+            "product_id": product_oid,
             "is_approved": True
         }))
         
-        ratings = [r["rating"] for r in approved_reviews]
-        count = len(ratings)
-        avg = round(sum(ratings) / count, 1) if count > 0 else 0.0
-        
-        # Sole writer updates to Module 3's product rating averages
-        db.products.update_one(
-            {"_id": product_id},
-            {"$set": {"rating_avg": avg, "rating_count": count}}
+        rating_count = len(approved_reviews)
+        if rating_count == 0:
+            rating_avg = 0.0
+        else:
+            rating_sum = sum(float(r.get("rating", 0)) for r in approved_reviews)
+            rating_avg = round(rating_sum / rating_count, 1)
+            
+        # Update product document in the "products" collection
+        db = get_db()
+        db["products"].update_one(
+            {"_id": product_oid},
+            {"$set": {
+                "rating_avg": rating_avg,
+                "rating_count": rating_count
+            }}
         )
-        
-        return avg, count
+        return rating_avg, rating_count

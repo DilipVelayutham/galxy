@@ -10,3 +10,11 @@ try:
         db = client['galxy']
 except Exception:
     db = client['galxy']
+
+def get_db():
+    """Gets the database instance."""
+    return db
+
+def get_reviews_col():
+    """Gets the reviews collection."""
+    return db["reviews"]

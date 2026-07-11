@@ -1,0 +1,180 @@
+
+GALXY
+Custom Lighting & Craft Studio
+Frontend Detail — All 12 Modules
+Pages, Components, State & Behavior per Module
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Companion to the 12 Module Specifications and Critical Frontend Components doc
+Document Date: July 2026
+
+Table of Contents
+
+
+
+Purpose of This Document
+Each of the 12 module specifications fully defines its backend contract but only names its frontend surfaces. This document fills that gap for all 12 modules at a level appropriate to standard, well-understood UI patterns — pages, components, key state, and behavior notes.
+Three components are novel enough to need full prop-level specification and are covered separately in the Critical Frontend Components document: AttributeRenderer (Module 4), StatusTracker (Module 8), and AttributeSchemaBuilder (Module 2). This document references them where relevant rather than repeating them.
+
+Module 1 — Auth & User Accounts
+Pages
+/signup, /login, /forgot-password, /reset-password, /account/profile, /account/addresses
+Components
+AuthForm (shared shell for signup/login, swaps fields), AddressCard, AddressForm (modal or inline), AuthGuard (wraps protected routes, redirects to login if no valid session)
+State Management
+Access token held in memory (React context, e.g. AuthContext) — never in localStorage (XSS risk).
+Refresh token lives in the httpOnly cookie set by the backend; frontend never touches it directly.
+On app load, silently call /api/auth/refresh once to hydrate the session if a valid refresh cookie exists — show a brief loading state, not a flash of “logged out.”
+On any 401 from any API call, trigger one silent refresh attempt; if that also fails, clear auth state and redirect to login.
+Key Interactions
+Signup/login forms validate inline (email format, password strength) before submit, mirroring Module 1's server-side rules so errors feel instant.
+“Forgot password” always shows the same success message regardless of whether the email exists (matches the backend's anti-enumeration behavior) — don't let the frontend leak this either.
+Address form: setting one address as default visually unchecks any other in the list immediately (optimistic UI), confirmed by the server response.
+Design System Notes
+Forms use the dark glassmorphism panel treatment; primary CTA buttons get the neon glow; validation errors use a warning tint, not a jarring red that clashes with the palette.
+
+Module 2 — Categories
+Pages
+/categories/[slug] (public), /admin/categories, /admin/categories/[id]/edit
+Components
+CategoryCard (grid item, public), CategoryHero (banner on category page), AttributeSchemaBuilder (admin — fully specified in the Critical Frontend Components document)
+Public Category Page
+Fetches GET /api/categories/:slug once, gets category + full attribute_schema in one call (per Module 2's frozen contract) — no second request needed to start rendering the configurator.
+Category banner tinted with that category's accent_color.
+Product grid beneath, filtered to this category (delegates to Module 3's product list).
+Admin
+Category list: drag-to-reorder (calls PUT /api/admin/categories/reorder), toggle active/inactive inline.
+Category edit form: name, description, tagline, cover/banner image upload (via Module 10's shared uploader), accent color picker (constrained to the 4 enum values), SEO fields.
+Attribute schema editing is a separate sub-screen/tab — see the dedicated AttributeSchemaBuilder specification.
+
+Module 3 — Products
+Pages
+/categories/[slug] (grid, shared with Module 2), /products/[slug] (detail), /admin/products, /admin/products/[id]/edit
+Components
+ProductCard, ProductGrid (handles pagination/infinite scroll), ProductGallery (image carousel on detail page), ProductFilters (price range, tags, sort), SearchBar
+Product Detail Page — the Most Composite Page in the App
+Fetches GET /api/products/:slug, which returns the product and its embedded category (schema included) in one call.
+Layout: image gallery / AI preview panel on one side, configurator (AttributeRenderer instances) + price + add-to-cart on the other. Side-by-side on desktop, stacked with configurator as a bottom sheet on mobile.
+default_attributes from the product pre-fills the configurator's initial state.
+Grid / Filtering
+Filters call GET /api/products with query params; debounce text search (400ms), apply price range on release/blur, sort/tag changes apply immediately.
+Empty state (“no products match”) should stay in the same dark theme, not a jarring default illustration.
+Admin
+Standard table with filters (category, stock status, active), bulk image upload per product, thumbnail selection UI (pick from already-uploaded images, per Module 3's rule that thumbnail isn't auto-assigned on delete).
+
+Module 4 — Configurator & Pricing Engine
+No pages of its own. This module's entire frontend footprint is the AttributeRenderer component and the price-display/count-up logic on whichever page hosts it (primarily Module 3's product detail page).
+Fully specified in the Critical Frontend Components document — props contract, per-type rendering, debouncing rules, price animation ownership (lives in the parent page, not the component itself).
+Additional Note
+The parent page is responsible for calling POST /api/configurator/validate before allowing “Add to Cart” or “Generate AI Preview” to proceed, surfacing any returned field errors back down into the relevant AttributeRenderer instances via the error prop.
+
+Module 5 — AI Preview Generation
+Components
+AIPreviewPanel, AIGenerationHistory (customer-facing “your recent designs”)
+AIPreviewPanel Behavior
+Sits alongside the product image gallery on the detail page; toggles between “Product Photos” and “AI Preview” tabs, or shows AI Preview by default once the customer has changed any affects_ai_preview attribute.
+Loading state: per the design system, an animated glow scan-line or pulsing gradient placeholder — never a generic spinner.
+On success: shows the image, the disclaimer text (“AI-generated approximation...”), and a “Regenerate” button.
+On 429 (rate limited): shows a clear, friendly message — “You've used your free previews for now — sign up to keep designing” (guest) or “Daily limit reached, try again tomorrow” (logged-in user) — never a raw error.
+Stale-preview indication (per the AttributeRenderer specification): when an affects_ai_preview attribute changes after a preview already exists, dim the current preview slightly and show a “Preview may be outdated — Regenerate” prompt rather than auto-firing a new generation.
+Generation History
+A simple horizontal scroll of past thumbnails (from GET /api/ai/generations/:user_id), click to restore that configuration into the configurator.
+
+Module 6 — Cart
+Pages
+/cart
+Components
+CartDrawer (slide-out, accessible from any page via the sticky cart icon), CartPage (full page version), CartItemRow, QuantityStepper
+Behavior
+Cart icon in nav shows live item_count badge (from GET /api/cart, fetched on auth state change and after any cart mutation).
+Adding an item: icon bounce + glow flash (per design system), brief toast confirmation.
+CartItemRow displays the snapshot fields (title, thumbnail, category name) plus the live price_breakdown — expandable to show the itemized breakdown from Module 4.
+Stale item handling (per Module 6's backend specification): if is_available: false or needs_attention: true comes back on a cart item, show a clear inline warning banner on that row (“No longer available — remove” / “This option has changed — please reconfigure”) rather than silently rendering as if nothing's wrong.
+Quantity changes debounce slightly before calling the update endpoint, to avoid a flood of requests on rapid clicking.
+
+Module 7 — Wishlist
+Pages
+/wishlist
+Components
+WishlistButton (the heart icon, reused on every ProductCard and the product detail page), WishlistGrid
+Behavior
+WishlistButton reflects membership state from a client-side set of wishlisted product IDs, fetched once on login/app load (not per-card) — toggling calls add/remove in the background and updates local state optimistically.
+Same bounce + glow micro-interaction as cart, per the design system.
+Wishlist page reuses ProductGrid/ProductCard from Module 3 directly — no need for a separate grid component, since the hydrated response already matches the product card shape.
+
+Module 8 — Orders & Status Tracking
+Pages
+/checkout, /account/orders, /account/orders/[order_number], /admin/orders, /admin/orders/[id]
+Components
+CheckoutSummary, AddressSelector, OrderHistoryCard, StatusTracker (fully specified in the Critical Frontend Components document), AdminOrderTable, AdminStatusUpdateForm
+Checkout Flow
+Single page: cart summary (read-only, pulled from Module 6), address selection/entry (reuses Module 1's AddressForm), a final “Place Order” button — no payment step anywhere in this flow.
+On success, redirect to the order confirmation/detail page showing the new order_number prominently.
+Order History & Detail
+History list: compact cards (order number, status badge, total, date, thumbnail).
+Detail page: full item list with configurations, StatusTracker, and the customer-visible note if present on the latest status entry.
+Admin Order Management
+Table view with status filter chips, search by order number/customer, date range.
+Order detail: full info plus admin_notes (internal textarea, autosaves or explicit save), status update control (dropdown/buttons respecting the forward-mostly transition rules, with a mandatory note field that appears conditionally for backward moves/cancellation), and a quote-entry field for final_quoted_price.
+
+Module 9 — Reviews & Testimonials
+Pages
+Review section embedded on /products/[slug], /admin/reviews, testimonials embedded on homepage
+Components
+StarRating (display + input variants), ReviewForm, ReviewList, ReviewCard, TestimonialCarousel, AdminReviewModerationTable
+Behavior
+ReviewForm only renders/enables if the logged-in customer is eligible (frontend can optimistically check via an is_eligible flag if Module 3 adds it to the product detail response per Module 9's optional handoff note, or simply attempt submission and show the 403 message clearly if not).
+Submitted reviews show a “Pending approval” state to the submitting customer only (not publicly) — the frontend should reflect this so customers aren't confused about why their review isn't visible yet.
+TestimonialCarousel on homepage: auto-rotating or manually swipeable, pulls from GET /api/testimonials, respects prefers-reduced-motion for the auto-rotate.
+Admin Moderation
+A queue view defaulting to is_approved: false, with inline approve/reject buttons and a “promote to testimonial” action.
+
+Module 10 — Site Content / CMS
+Pages
+Homepage (/), /about, /contact, footer (global), /admin/site-content
+Components
+HeroSection, AboutSection, Footer, ContactSection, SocialLinks, and per-section AdminContentForm variants (one per section type, since each has a fixed, known shape per Module 10's specification)
+Behavior
+Every public section fetches its content from GET /api/site-content/:section (or the bulk variant) — never hardcoded, since this is the entire point of the module. Flag any hardcoded homepage copy found during review as a bug.
+Hero section carries the heaviest design-system weight: background video/image, the one-time flicker-on headline animation, animated grain overlay.
+Admin forms are straightforward per-field editors matching each section's known shape — no generic JSON editor, since that would let Asil submit malformed content.
+
+Module 11 — Notifications
+Components
+NotificationBell (nav icon with unread badge), NotificationDropdown / NotificationPanel, ToastNotification
+Behavior
+Bell badge count comes from the unread_count field always present on GET /api/notifications responses — poll periodically (e.g. every 60s) or refresh on relevant actions (order placed, page navigation), no WebSocket required for v1.
+Dropdown lists recent notifications, “Mark all read” action, click-through to the related order if related_order_number is present.
+ToastNotification is the transient pop-in used elsewhere too (cart add, wishlist add) — build it once here as a shared primitive other modules' components call into, rather than each module building its own toast.
+
+Module 12 — Admin Dashboard & Analytics
+Pages
+/admin (dashboard home), /admin/analytics/products, /admin/analytics/ai-usage
+Components
+StatCard (single metric tile), OrdersByStatusChart, TopCategoriesChart, ProductAnalyticsTable, AIUsageStats
+Behavior
+Dashboard home is a grid of StatCards (total orders, revenue estimate — clearly labeled as an estimate, pending review count as an actionable highlight) plus two charts (orders by status, top categories).
+Chart library: recommend Recharts — bar chart for orders-by-status, simple horizontal bar or donut for top categories.
+This is an internal, admin-only surface — flatter and denser per the design system's admin rules, but should still use the dark palette and accent colors for chart theming, not default light-mode chart styling.
+pending_review_count and pending_reviews_to_moderate stat cards should link directly to the relevant admin screens (Module 8's order list filtered to stale statuses, Module 9's moderation queue) — this dashboard surfaces problems, other modules' screens are where they get resolved.
+
+
+Summary — Shared Components Across Modules
+A handful of components are built once and reused across multiple modules. Building these as shared primitives (not duplicated per module) avoids inconsistent behavior and wasted effort.
+Component
+Built By
+Reused By
+ToastNotification
+Module 11
+Modules 6, 7, and any module confirming an action
+ProductCard / ProductGrid
+Module 3
+Modules 2 (category pages), 7 (wishlist page)
+AddressForm
+Module 1
+Module 8 (checkout)
+AttributeRenderer
+Module 4
+Module 3 (product detail), Module 6 (cart reconfiguration)
+Media upload widget
+Module 10
+Modules 2, 3, 5, 9 (any image upload)

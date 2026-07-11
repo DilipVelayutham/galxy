@@ -1,0 +1,174 @@
+/**
+ * app/(admin)/admin.css
+ *
+ * Global admin shell styles — topbar, layout grid, typography.
+ * Dark theme only. No light mode toggle (brand-wide rule per §7).
+ * Imported by app/(admin)/layout.tsx.
+ */
+
+/* ─── CSS Custom Properties ─────────────────────────────────────────────── */
+:root {
+  /* Dark base palette */
+  --color-bg:            #0a0b0d;
+  --color-surface:       #111318;
+  --color-surface-2:     #181c23;
+  --color-surface-3:     #1f2430;
+  --color-border:        #2a2f3d;
+  --color-border-focus:  #4d6cfa;
+
+  /* Accent — same brand colors as public site, flat application for admin */
+  --color-accent:        #4d6cfa;
+  --color-accent-hover:  #5f7bff;
+  --color-accent-dim:    rgba(77, 108, 250, 0.15);
+
+  /* Semantic */
+  --color-success:       #22c55e;
+  --color-success-dim:   rgba(34, 197, 94, 0.12);
+  --color-error:         #ef4444;
+  --color-error-dim:     rgba(239, 68, 68, 0.12);
+  --color-warning:       #f59e0b;
+
+  /* Text */
+  --color-text:          #e8eaf0;
+  --color-text-muted:    #8b92a5;
+  --color-text-subtle:   #555d73;
+
+  /* Radius scale — consistent across all form inputs/buttons */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+
+  /* Spacing */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Topbar height */
+  --topbar-h: 56px;
+
+  /* Font */
+  --font-sans: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Transitions */
+  --transition-fast:   150ms ease;
+  --transition-normal: 220ms ease;
+}
+
+/* ─── Reset ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Admin Shell ───────────────────────────────────────────────────────── */
+.admin-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+/* ─── Topbar ────────────────────────────────────────────────────────────── */
+.admin-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--topbar-h);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+}
+
+.admin-topbar-inner {
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.admin-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.3px;
+  flex-shrink: 0;
+}
+
+.admin-logo-mark {
+  color: var(--color-accent);
+  font-size: 18px;
+}
+
+.admin-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.admin-nav-link {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 13px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.admin-nav-link:hover,
+.admin-nav-link[aria-current="page"] {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.admin-topbar-end {
+  margin-left: auto;
+}
+
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px var(--space-2);
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ─── Main Content ──────────────────────────────────────────────────────── */
+.admin-main {
+  flex: 1;
+  padding: var(--space-6);
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}

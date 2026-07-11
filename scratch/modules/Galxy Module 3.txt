@@ -1,0 +1,198 @@
+GALXY
+Website Project — Module Contract & Development Spec
+MODULE 3
+Products (Public + Admin)
+Pre-Designed & Fully-Custom Product Listings · Category-Bound Catalog
+
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Stack: Flask · MongoDB · Cloudinary
+Document Date: July 2026
+
+1. Scope
+This module owns individual product listings within categories — both pre_designed products (ready-made pieces customers can buy as-is or lightly customize) and fully_custom product entries (a category's generic "build your own" starting point, e.g. "Custom Neon Sign" with no fixed design, just the configurator).
+Products are always attached to exactly one category and inherit that category's attribute_schema. This module does not define configurable options — it only stores product-level data (images, base price, description) and optionally pre-fills default attribute selections.
+2. Collection Owned by This Module
+2.1 products
+{
+  "_id": ObjectId,
+  "category_id": ObjectId,
+  "category_slug": "neon-name-boards",
+  "title": "Custom Cursive Neon Sign",
+  "slug": "custom-cursive-neon-sign",
+  "type": "pre_designed | fully_custom",
+  "base_price": 1499,
+  "images": ["cloudinary_url", "cloudinary_url"],
+  "thumbnail": "cloudinary_url",
+  "description": "string",
+  "specifications": {
+    "material": "Flex LED Neon",
+    "power": "12V Adapter Included",
+    "avg_production_days": 5
+  },
+  "default_attributes": {
+    "font": "cursive",
+    "color": "blue"
+  },
+  "stock_status": "in_stock | made_to_order | out_of_stock",
+  "tags": ["bestseller", "new", "gifting"],
+  "is_featured": false,
+  "is_active": true,
+  "views": 0,
+  "rating_avg": 0,
+  "rating_count": 0,
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+
+Indexes:
+slug — unique
+category_id — filter index
+is_active, is_featured, tags — filter indexes
+Text index on title + description for search
+
+Denormalization Note
+category_slug is a denormalized copy of the category's slug, refreshed whenever the category is fetched alongside the product. This avoids an extra lookup on every product card render on category listing pages. If a category's slug ever changes (rare, discouraged per Module 2's rules), this module needs a small backfill script — flag this dependency to Module 2's team.
+3. pre_designed vs fully_custom — Behavioral Difference
+
+pre_designed
+fully_custom
+Appears in category grid
+Yes, as its own card
+Usually one per category, e.g. "Design Your Own"
+default_attributes
+Pre-filled to match the exact photographed product
+Empty or minimal — customer builds from scratch
+Customer can still change attributes
+Yes — configurator is always editable, this only sets the starting point
+Yes
+images
+Real product photos
+Can be a generic category hero image; AI preview becomes the primary visual once customer configures
+Typical base_price
+Fixed price of the exact shown design
+Starting/minimum price; configurator additions increase it
+
+Unified Code Path
+Both types go through the exact same configurator, cart, and order flow — this is purely a display and default-value distinction, not a structural fork. Keep the code path unified; don't branch logic by type except for default_attributes pre-fill and grid display treatment.
+4. Folder Structure (Flask)
+app/
+  models/
+    product.py
+  services/
+    product_service.py       — CRUD, search, filtering, pagination
+    product_image_service.py — Cloudinary upload/delete for product images
+  routes/
+    product_routes.py        — public
+    admin_product_routes.py  — admin CRUD
+  utils/
+    slug_helper.py            — reused from Module 2's pattern (shared util, don't duplicate)
+    search_helper.py          — builds MongoDB text search + filter queries
+5. API Contract
+Standard response shapes throughout (as established in prior modules).
+5.1 Public Routes
+  GET     /api/products
+Query params:
+  category (slug)      — filter by category
+  min_price, max_price — filter by base_price range
+  tags                 — comma-separated, matches any
+  featured             — true/false
+  sort                 — "newest" | "price_asc" | "price_desc" | "popular" (by views)
+  page, limit           — pagination (default limit 20)
+Success 200:
+{ "success": true, "data": [
+  { "_id","title","slug","category_slug","thumbnail","base_price",
+    "stock_status","rating_avg","is_featured" }
+], "page":1,"limit":20,"total":0,"totalPages":0 }
+
+Lightweight List Responses
+List responses stay lightweight — no full "images" array, no "specifications", no "default_attributes". Detail view only.
+
+  GET     /api/products/:slug
+Success 200:
+{ "success": true, "data": {
+  ...full product object...,
+  "category": { "_id","slug","name","attribute_schema","accent_color" }
+    — the owning category embedded inline so the frontend gets everything
+      needed to render the configurator in ONE call, no second fetch.
+} }
+Side effect: increments "views" by 1 (fire-and-forget, don't block response on it).
+Code
+Error Condition
+404
+Not found or inactive
+
+  GET     /api/products/search?q=neon+blue+sign
+Full-text search across title + description + tags.
+Same list response shape as GET /api/products.
+Empty/short query (<2 chars) returns 400.
+5.2 Admin Routes (require @require_admin)
+  GET     /api/admin/products
+Returns all products including inactive/out-of-stock, admin-level filters
+(by category, stock_status, is_active), full pagination.
+
+  POST     /api/admin/products
+Body: { "category_id","title","type","base_price","description",
+        "specifications":{},"default_attributes":{},"stock_status",
+        "tags":[],"is_featured" }
+- slug auto-generated from title server-side
+- category_slug denormalized from category_id at creation time
+- images/thumbnail set via separate upload endpoint below (product must
+  exist first to attach images to)
+- VALIDATION: default_attributes keys must exist in the category's
+  attribute_schema — reject with 400 + field errors if a key doesn't match
+  (calls Module 2's schema_validator or a shared validation util)
+Success 201: { "success": true, "data": {...product...} }
+
+  PUT     /api/admin/products/:id
+Body: any subset of product fields except slug and category_id
+      (changing category_id after creation is intentionally disallowed —
+      if a product genuinely belongs elsewhere, admin should deactivate
+      and recreate it, since default_attributes would otherwise reference
+      a stale schema)
+Success 200: { "success": true, "data": {...} }
+
+  DELETE     /api/admin/products/:id
+Soft-delete only (is_active: false).
+Reason: existing cart items, wishlist entries, and past orders reference
+product_id — hard delete would break historical order display.
+
+  POST     /api/admin/products/:id/images
+Multipart form upload, one or more files.
+- Uploads to Cloudinary via product_image_service
+- Appends resulting URLs to the product's "images" array
+- If product has no thumbnail yet, first uploaded image auto-sets as thumbnail
+Success 200: { "success": true, "data": { "images":[...], "thumbnail":"..." } }
+
+  DELETE     /api/admin/products/:id/images
+Body: { "image_url" }
+Removes a specific image from the array and deletes it from Cloudinary.
+If the removed image was the thumbnail, admin must set a new one explicitly
+via PUT (don't auto-pick — could silently swap the featured image unexpectedly).
+
+  PUT     /api/admin/products/:id/thumbnail
+Body: { "image_url" }   — must be a URL already present in the product's images array
+Success 200: { "success": true, "data": {...} }
+6. Validation Rules
+title: required, 3–120 characters.
+base_price: required, positive number.
+type: must be pre_designed or fully_custom.
+category_id: must reference an existing, active category.
+default_attributes: every key must exist in the referenced category's attribute_schema; every value must be a valid option for that attribute (or within min/max for slider/number types). Reject invalid combinations at creation/edit time — don't let bad defaults reach the storefront.
+stock_status: enum only, no free text.
+At least one image required before a product can be set is_active: true (a product with zero images shouldn't go live — enforce as a soft check with a clear admin warning, not necessarily a hard block, since Asil may want to stage a draft).
+7. Rating Fields — Ownership Note
+rating_avg and rating_count live on the product document but are written by Module 9 (Reviews), not by this module. This module only reads/displays them. Module 9's review-approval flow recalculates and updates these two fields on the product whenever a review is approved or removed.
+Coordination Note
+Coordinate the exact update function signature with Module 9's team so both sides agree on who calls what.
+8. What This Module Does NOT Do
+No configurator logic or price calculation beyond storing base_price (Module 4 owns price computation using this base + category attribute deltas).
+No AI preview generation (Module 5) — though product detail responses are what the frontend uses to know which category schema to pass into the AI preview call.
+No cart/wishlist state (Modules 6/7) — those reference product_id but live in their own collections.
+No review content (Module 9) — this module only stores the rollup rating numbers.
+General media upload infrastructure is shared with Module 10 where reasonable — if product_image_service and Module 10's general uploader end up duplicating Cloudinary boilerplate, consolidate into one shared cloudinary_helper.py in app/utils/ rather than maintaining two.
+9. Handoff Contract for Other Teams
+Treat as frozen from Day 1:
+product._id — referenced as product_id by Cart, Wishlist, Orders, Reviews, AI Generations.
+product.category_id — every cart/order item needs this to look up the correct attribute_schema for validation (Module 4) and AI prompt template (Module 5) without a second query.
+GET /api/products/:slug returns the category embedded inline — frontend product pages should rely on this single call rather than fetching category separately.
+default_attributes is a starting point only — cart items always store their own selected_attributes snapshot (Module 6); changing a product's default_attributes later must never retroactively alter attributes already in someone's cart or a placed order.

@@ -1,0 +1,93 @@
+
+GALXY
+Custom Lighting & Craft Studio
+Module 7 — Wishlist
+Lightweight Product Bookmarking · No Config, No Pricing
+Consumer of Module 3 (Products)
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Stack: Flask · MongoDB
+Document Date: July 2026
+
+1. Scope
+The smallest module in the system by design. Wishlist lets a logged-in customer save products they're interested in without committing to configuring or pricing them yet — a lightweight "come back to this later" list, distinct from Cart (which always carries a specific configuration and price). Because of that distinction, Wishlist stores product references only, never selected_attributes or pricing.
+
+2. Collection Owned by This Module
+2.1 wishlists
+{
+  "_id": ObjectId,
+  "user_id": ObjectId,
+  "product_ids": [ObjectId, ObjectId, ObjectId],
+  "updated_at": "datetime"
+}
+
+Indexes
+user_id — unique (one wishlist document per user, same pattern as Cart in Module 6)
+
+Design decision: a flat array of product_ids rather than an array of sub-documents. Wishlist deliberately carries no configuration state — if a customer wants to act on a wishlist item, they go to the product page and configure it fresh (which may also reflect updated pricing/options since they saved it). This keeps the model intentionally simple; resist the urge to add fields here later without a clear reason, since that would blur the Cart/Wishlist distinction.
+3. Folder Structure (Flask)
+app/
+  models/
+    wishlist.py
+  services/
+    wishlist_service.py    — get_or_create, add, remove, check membership
+  routes/
+    wishlist_routes.py
+
+4. Auth Requirement
+Every route requires @require_auth (Module 1) — same as Cart, no guest wishlist support. If a guest clicks the wishlist heart icon on a product card, the frontend should redirect to signup/login (same pattern flagged in Module 6 for cart) rather than this module attempting any session-based guest tracking. Wishlist is lower-urgency than the AI preview flow, so unlike Module 5 there's no need to support guests here.
+
+5. API Contract
+Standard response shapes as established in prior modules. All routes require @require_auth.
+5.1 Get Wishlist
+GET /api/wishlist
+Success 200:
+{ "success": true, "data": {
+  "products": [
+    { "_id","title","slug","thumbnail","base_price","category_slug","stock_status" }
+  ],
+  "count": 3
+} }
+
+Note this response hydrates the raw product_ids into lightweight product cards (same shape as the product list view from Module 3) — the frontend wishlist page should never need a second round-trip to display the grid. Internally, wishlist_service fetches product_ids from the wishlist doc, then queries Module 3's product data for display fields. If a product in the list is inactive/soft-deleted, still include it in the response but flag it ("is_available": false) rather than silently dropping it — same graceful-degradation pattern established in Module 6 for stale cart items, applied here for consistency.
+5.2 Add to Wishlist
+POST /api/wishlist/:product_id
+Success 200:
+{ "success": true, "message": "Added to wishlist", "data": { "count": 4 } }
+ 
+Rules:
+- Idempotent: adding a product_id already in the list is not an error,
+  just returns success with the unchanged count (use MongoDB's $addToSet,
+  not $push, to prevent duplicates at the database level).
+- Validate product_id references an existing product before adding
+  (404 if not found) — don't let the wishlist silently accumulate
+  garbage/invalid references.
+
+5.3 Remove from Wishlist
+DELETE /api/wishlist/:product_id
+Success 200:
+{ "success": true, "message": "Removed from wishlist", "data": { "count": 2 } }
+ 
+Rules:
+- Idempotent: removing a product_id not in the list is not an error,
+  just returns success with the unchanged count ($pull is naturally
+  idempotent here).
+
+6. Frontend Integration Notes (for context, not this module's direct responsibility)
+The wishlist "heart" icon shown on every product card (grid, detail page) needs to reflect current membership state without a separate API call per card. Recommended pattern: fetch the full wishlist's product_ids once on app load/login (a lightweight variant — could add a minimal GET /api/wishlist/ids returning just the raw ID array if the hydrated response proves too heavy for this specific use case; flag this optimization to the frontend team, add only if the hydrated endpoint turns out to be a performance issue in practice) and keep it in frontend state, toggling hearts client-side while calling add/remove in the background.
+Per the design system, adding to wishlist should trigger the same "icon bounce + glow flash" micro-interaction described for the cart icon — this module's job is just to make the add/remove calls fast and reliable so that animation feels instant.
+
+7. What This Module Does NOT Do
+Does not store pricing, configuration, or AI preview data — wishlist is a pure bookmark list, nothing more. If a customer wants to see price/configure a wishlisted item, that happens on the product page itself (Module 3 + Module 4), not here.
+Does not support guest wishlists.
+Does not enforce a maximum wishlist size in v1 — not a meaningful concern at this business's scale; flag only if it ever becomes one.
+Does not cascade-clean automatically when a product is hard-deleted (which shouldn't happen anyway per Module 3's soft-delete-only rule) — since products are never hard-deleted, a dangling reference scenario shouldn't occur in practice.
+
+8. Handoff Contract for Other Teams
+Treat as frozen from Day 1:
+
+Contract Item
+Detail
+Hydrated response
+GET /api/wishlist returns fully hydrated product cards, not raw IDs — frontend wishlist page consumes this directly, no secondary product fetch needed.
+Service helper
+wishlist_service.is_product_wishlisted(user_id, product_id) — exposed as an importable helper in case Module 3's product detail response ever needs to include an is_wishlisted boolean for the logged-in viewer (nice-to-have, coordinate with Module 3's TL if they want to add this via @optional_auth on the product detail route rather than requiring the frontend to cross-reference two separate API responses).

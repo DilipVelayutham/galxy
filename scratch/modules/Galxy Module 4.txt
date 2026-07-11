@@ -1,0 +1,130 @@
+GALXY
+Website Project — Module Contract & Development Spec
+MODULE 4
+Configurator & Pricing Engine
+Attribute Validation · Server-Authoritative Price Calculation
+
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Stack: Flask · MongoDB · Cloudinary
+Document Date: July 2026
+
+1. Scope
+This module has no collection of its own — it's a pure computation layer sitting between Categories (Module 2), Products (Module 3), and every downstream consumer (Cart, AI Preview, Orders). Its job is exactly two things:
+Validate a customer's selected attributes against a category's attribute_schema.
+Calculate price — base price + sum of attribute-driven deltas/formulas.
+
+Risk of Duplication
+Every other module that needs "is this selection valid?" or "what does this cost?" calls into this module rather than re-implementing the logic. This is the module most at risk of logic duplication across the codebase if its contract isn't respected — flag this clearly to all TLs.
+2. Why This Is a Separate Module (Not Folded Into Products)
+The configurator/pricing logic needs to run in at least four different places:
+Product detail page (live price preview as customer picks options)
+Add to cart (server-side re-validation, never trust client-sent prices)
+AI preview generation (Module 5 needs validated attributes before building a prompt)
+Checkout (Module 8 needs final authoritative pricing at order-creation time)
+
+Why Centralize
+Centralizing this avoids four teams writing four slightly-different, slowly-diverging versions of the same price math.
+3. Folder Structure (Flask)
+app/
+  services/
+    configurator_service.py   — validate_attributes(category, selected_attributes)
+    pricing_service.py        — calculate_price(product, category, selected_attributes, quantity)
+  routes/
+    configurator_routes.py
+  utils/
+    price_formula_helper.py   — applies linear formula for slider/number types
+
+No Model File
+This module operates on data owned by Modules 2 and 3, it doesn't own its own collection.
+4. Validation Logic — validate_attributes()
+Input: category.attribute_schema (from Module 2) + a selected_attributes dict (e.g. {"font": "cursive", "color": "blue", "chain": true}).
+4.1 Checks Performed, In Order
+Every key in selected_attributes must exist in the category's attribute_schema. Unknown keys → reject (prevents injection of arbitrary fields into cart/order records).
+Every attribute marked "required": true in the schema must be present in selected_attributes. Missing required key → reject with the specific missing key named.
+For select / color_swatch / image_swatch: the selected value must match one of that attribute's options[].value.
+For toggle: value must be strictly boolean.
+For slider / number: value must be numeric and within min/max (inclusive).
+For text_input: enforce a reasonable max length server-side (e.g. 60 characters) even if the schema doesn't specify one — prevents abuse via extremely long strings breaking AI prompts or UI layout.
+If any attribute in the schema is "is_active": false, its key must not appear in selected_attributes — an admin who disabled an option shouldn't let it still be selectable.
+
+4.2 Output Contract
+{ "valid": true, "errors": {} }
+or
+{ "valid": false, "errors": { "font": "Invalid option 'italic' for this category", "size": "Value must be between 6 and 24" } }
+
+Shared Function, Not Just a Route
+This function is called internally by other services (Cart, Orders, AI Preview) — it is not just an HTTP endpoint, it's a shared importable function. Expose it as a clean Python function first, wrap it in a route second.
+5. Pricing Logic — calculate_price()
+Input: product.base_price, category.attribute_schema, selected_attributes, quantity (default 1).
+5.1 Calculation Steps
+Start with total = product.base_price.
+For each key in selected_attributes:
+select / color_swatch / image_swatch: add the matching option's price_delta.
+toggle: if value is true, add the attribute's flat price_delta.
+slider / number with a price_formula:
+if value > price_formula.base_included_units:
+    extra_units = value - base_included_units
+    total += extra_units * price_formula.rate_per_unit
+text_input: no price impact (unless a future requirement adds per-character pricing — not in v1).
+Multiply the attribute-adjusted unit price by quantity.
+Round to nearest whole rupee (no paise handling needed for this business).
+
+5.2 Output Contract
+{
+  "unit_price": 1799,
+  "quantity": 2,
+  "line_total": 3598,
+  "breakdown": [
+    { "key": "base_price", "label": "Base Price", "amount": 1499 },
+    { "key": "font", "label": "Font Style: Bold", "amount": 150 },
+    { "key": "chain", "label": "Chain: Yes", "amount": 150 },
+    { "key": "size", "label": "Size: +6 inches", "amount": 150 }
+  ]
+}
+
+Why the Breakdown Array Matters
+The breakdown array matters — it's what powers the "price updates with a smooth count-up" UI described in the design system, and lets the customer (and Asil, on the order detail page) see exactly why a price is what it is, rather than a single opaque number.
+6. API Contract
+Standard response shapes as established in prior modules.
+  POST     /api/configurator/validate
+Body: { "category_id", "selected_attributes": {} }
+Success 200:
+{ "success": true, "data": { "valid": true, "errors": {} } }
+Success 200 (invalid selection is still a 200, not an error status — it's a normal validation result, not a server failure):
+{ "success": true, "data": { "valid": false, "errors": {...} } }
+Code
+Error Condition
+404
+Category not found
+
+  POST     /api/configurator/price
+Body: { "product_id", "category_id", "selected_attributes": {}, "quantity": 1 }
+- Runs validate_attributes() FIRST, internally. If invalid, returns 400
+  with the same errors shape — never calculates a price for an invalid
+  selection.
+Success 200:
+{ "success": true, "data": { "unit_price","quantity","line_total","breakdown":[] } }
+Code
+Error Condition
+400
+Invalid attributes (errors object included)
+404
+Product or category not found
+7. Critical Rule: Server Is the Source of Truth on Price, Always
+The frontend will naturally compute and display a live price as the customer moves sliders and clicks options — that's expected and good UX. But that frontend number is advisory only. Every write operation downstream (add to cart, checkout) must call calculate_price() server-side again and use that result, never trust a price sent from the client. This must be explicitly communicated to:
+Module 6 (Cart) — when adding/updating a cart item, re-derive unit_price_estimate server-side via this module, don't accept it as client input.
+Module 8 (Orders) — when converting cart → order at checkout, re-validate and re-price every line item server-side one final time (category schemas or product base prices may have changed between add-to-cart and checkout, especially with Asil actively editing the CMS).
+
+Most Important Integration Rule
+This is the single most important integration rule of this module — flag it explicitly to both TLs.
+8. What This Module Does NOT Do
+Does not store any data of its own — pure functions/services over Category and Product data.
+Does not call the AI provider (Module 5) — though Module 5 should call this module's validate_attributes() before building a prompt, so it never generates a preview for an invalid/nonsensical selection.
+Does not touch cart or order documents directly — it returns numbers and validation results; Modules 6 and 8 are responsible for persisting them.
+Does not handle currency conversion or tax — single currency (INR), no tax logic requested; flag if this becomes a future requirement.
+9. Handoff Contract for Other Teams
+Treat as frozen from Day 1:
+configurator_service.validate_attributes(category, selected_attributes) → {valid, errors} — import and call directly for any internal validation need; don't re-implement.
+pricing_service.calculate_price(product, category, selected_attributes, quantity) → {unit_price, quantity, line_total, breakdown} — same, the canonical price function for the entire platform.
+POST /api/configurator/price is the endpoint the frontend configurator UI polls (debounced) on every attribute change to show a live price — this must stay fast (single DB read for product + category, then pure computation, no heavy work) since it may be called frequently per session.
+The breakdown array shape is depended on by the frontend's price display component and by Module 8's order detail page (showing Asil and the customer the same itemized breakdown) — don't change its field names without notifying both consumers.

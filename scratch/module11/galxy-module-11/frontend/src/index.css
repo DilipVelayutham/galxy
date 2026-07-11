@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #0B0B0F;
+  color: #F4F4F7;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+}
+
+/* Custom Scrollbar for Dropdown list */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #0B0B0F;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(155, 92, 255, 0.3);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(24, 231, 255, 0.5);
+}

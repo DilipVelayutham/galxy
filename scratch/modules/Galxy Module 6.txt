@@ -1,0 +1,148 @@
+
+GALXY
+Custom Lighting & Craft Studio
+Module 6 — Cart
+Persisted Selections · Server-Verified Pricing · Checkout Handoff
+Consumer of Module 4 (Pricing) & Module 5 (AI Preview)
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Stack: Flask · MongoDB
+Document Date: July 2026
+
+1. Scope
+This module owns the shopping cart — the staging area between "customer has configured something" and "customer has committed to an order." It's intentionally thin: most of the hard logic (validation, pricing, AI preview) is delegated to Modules 4 and 5. Cart's job is to persist selections correctly, keep prices honest, and hand off cleanly to checkout (Module 8).
+
+2. Collection Owned by This Module
+2.1 carts
+{
+  "_id": ObjectId,
+  "user_id": ObjectId,
+  "items": [
+    {
+      "_id": ObjectId,
+      "product_id": ObjectId,
+      "category_id": ObjectId,
+      "product_title": "string (snapshot, see Section 4)",
+      "category_name": "string (snapshot)",
+      "thumbnail": "cloudinary_url (snapshot)",
+      "selected_attributes": {},
+      "quantity": 1,
+      "unit_price_estimate": 1799,
+      "line_total_estimate": 1799,
+      "price_breakdown": [ /* from Module 4's calculate_price() */ ],
+      "ai_preview_image": "cloudinary_url or null",
+      "custom_text": "string or null",
+      "added_at": "datetime",
+      "updated_at": "datetime"
+    }
+  ],
+  "updated_at": "datetime"
+}
+
+Indexes
+user_id — unique (one cart document per user, not one per session — cart requires login, per Module 1's access rules: guests can browse and use AI preview, but must sign up to add to cart)
+
+Design decision: one cart document per user, not a separate cart_items collection. Cart sizes here are small (a handful of custom craft items, not hundreds of SKUs), so embedding items in a single document keeps reads/writes atomic and simple — no need for a join-heavy structure.
+3. Folder Structure (Flask)
+app/
+  models/
+    cart.py
+  services/
+    cart_service.py         — get_or_create_cart, add_item, update_item, remove_item, clear
+  routes/
+    cart_routes.py
+  utils/
+    cart_snapshot_helper.py — builds the denormalized product/category snapshot fields
+
+4. Auth Requirement
+Every route in this module requires @require_auth (Module 1) — no guest cart support in v1. If a guest configures a product and generates an AI preview, then hits "Add to Cart," the frontend should redirect to signup/login and preserve the pending selection client-side (e.g. in memory/sessionStorage) to auto-add it right after auth succeeds. That redirect-and-resume flow is a frontend concern, but flag it clearly to the frontend team building the product/configurator page — Cart's API itself only ever deals with authenticated users.
+
+5. Why Cart Items Snapshot Product/Category Data
+product_title, category_name, and thumbnail are copied onto the cart item at add-time rather than looked up live every time the cart is fetched. Reasons:
+Performance: cart is fetched frequently (every page, for the cart icon badge and drawer) — avoiding a join to products/categories on every load matters.
+Stability: if Asil edits a product's title or swaps its thumbnail while it's sitting in someone's cart, the cart shouldn't silently change under the customer mid-session — they added "Custom Cursive Neon Sign," they should keep seeing that name until they check out or explicitly re-configure.
+
+However — price is never trusted from the snapshot alone. unit_price_estimate is recalculated server-side (via Module 4) on every add/update, and is re-validated again at checkout (Module 8) against current base_price and attribute_schema, since those are allowed to change and the final quote must reflect reality. The snapshot is for display stability, not price authority.
+6. API Contract
+Standard response shapes as established in prior modules. All routes require @require_auth.
+6.1 Get Cart
+GET /api/cart
+Success 200:
+{ "success": true, "data": {
+  "items": [...],
+  "item_count": 3,
+  "subtotal_estimate": 5397
+} }
+If no cart exists yet for this user, auto-create an empty one and return it
+(never 404 on a missing cart — a user without a cart yet is not an error state).
+
+6.2 Add Item
+POST /api/cart/items
+Body: { "product_id", "selected_attributes": {}, "quantity": 1,
+        "ai_preview_image"?, "custom_text"? }
+ 
+Flow:
+1. Fetch product + its category
+2. Call Module 4's validate_attributes() — 400 with errors if invalid
+3. Call Module 4's calculate_price() — never trust a price from the request body
+4. Build snapshot fields (title, category_name, thumbnail)
+5. Append as new item (see "duplicate items" rule below)
+ 
+Success 201: { "success": true, "message": "Added to cart", "data": {...updated cart...} }
+Errors:
+  400 — invalid attributes
+  404 — product not found or inactive
+
+Duplicate items rule: if a customer adds the same product_id with the exact same selected_attributes and custom_text already in their cart, increment that existing item's quantity instead of creating a duplicate line. Any difference in selected_attributes or custom_text (e.g. a different name lettered, a different color) creates a new, separate line item — these are genuinely different custom pieces, not the same SKU.
+6.3 Update Item
+PUT /api/cart/items/:item_id
+Body: { "selected_attributes"?, "quantity"?, "custom_text"?, "ai_preview_image"? }
+ 
+- If selected_attributes or custom_text change: re-validate (Module 4) and
+  re-price, exactly as in Add Item.
+- If only quantity changes: re-price using the same attributes, just scale
+  the line_total.
+- quantity must be a positive integer (reject 0 or negative — use DELETE
+  to remove an item, not quantity: 0).
+ 
+Success 200: { "success": true, "data": {...updated cart...} }
+Errors:
+  400 — invalid attributes or invalid quantity
+  404 — item not found in this user's cart
+
+6.4 Remove Item
+DELETE /api/cart/items/:item_id
+Success 200: { "success": true, "message": "Item removed", "data": {...updated cart...} }
+Errors: 404 — item not found in this user's cart
+
+6.5 Clear Cart
+DELETE /api/cart/clear
+Success 200: { "success": true, "message": "Cart cleared", "data": { "items": [] } }
+
+Called by Module 8 automatically after a successful checkout — flag this integration point explicitly to the Orders team (cart should empty the moment an order is created from it, not require a separate manual customer action).
+7. Stale Cart Item Handling
+Because carts can persist for days/weeks while Asil actively edits categories and products, cart items can go stale in two ways — both must degrade gracefully, never crash the cart:
+Referenced product becomes inactive/deleted (soft-deleted). GET /api/cart should flag such items in the response ("is_available": false) rather than silently dropping them, so the frontend can show "This item is no longer available" with a remove option, instead of a confusing missing row.
+Referenced category's attribute_schema changed (an attribute key the cart item used was removed or its options changed). On cart fetch, re-run validate_attributes() silently against current schema; if it now fails, flag the item ("needs_attention": true) with the specific error, but do not auto-modify or auto-remove the customer's selection — let them see and resolve it themselves (e.g. re-pick a font that still exists).
+
+This graceful-degradation behavior should be computed at read time (GET /api/cart), not stored on the document — the flags are always current, never go stale themselves.
+
+8. What This Module Does NOT Do
+Does not calculate prices itself — every price number in a cart item comes from Module 4's calculate_price(), called fresh on every write.
+Does not validate attribute selections itself — delegates to Module 4's validate_attributes().
+Does not generate AI previews — accepts an already-generated ai_preview_image URL from the frontend (which got it from Module 5) and just stores it.
+Does not handle checkout, payment, or order creation — Module 8 reads the cart, re-validates/re-prices one final time, creates the order, then calls this module's clear function.
+Does not support guest carts — auth is mandatory for every route here.
+
+9. Handoff Contract for Other Teams
+Treat as frozen from Day 1:
+
+Contract Item
+Detail
+Item ID
+cart.items[]._id — used by frontend as the stable key for update/remove operations; not the same as product_id (a product can appear as multiple distinct cart items with different configurations).
+Get Cart shape
+GET /api/cart response shape (items, item_count, subtotal_estimate) — the nav bar cart icon badge and cart drawer both depend on item_count being present on every cart fetch without a separate call.
+Service function
+cart_service.get_or_create_cart(user_id) — exposed as an importable function for Module 8 to call directly at checkout time, rather than going through the HTTP route internally.
+Clear on checkout
+DELETE /api/cart/clear — Module 8 must call this immediately after successful order creation, inside the same transactional flow if possible, so a failed checkout never silently empties the cart while an order failed to save.

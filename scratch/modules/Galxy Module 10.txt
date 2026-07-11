@@ -1,0 +1,172 @@
+
+GALXY
+Custom Lighting & Craft Studio
+Module 10 — Site Content / CMS
+Editable Homepage, About, Footer & Contact · Shared Media Upload Utility
+Owns the Canonical Cloudinary Wrapper for Modules 3, 5 & 9
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Stack: Flask · MongoDB
+Document Date: July 2026
+
+1. Scope
+This module gives Asil control over everything on the site that isn't a category, product, order, or review — the homepage hero, about page, footer, contact details, SEO metadata, and general-purpose media uploads. Its entire reason for existing is the project's core promise: Asil should never need a developer to update copy, swap a banner image, or change the contact number.
+This module also owns the shared Cloudinary upload utility that other modules have been flagged throughout this spec to consolidate around, since general media handling belongs here rather than being duplicated per-module.
+
+2. Collection Owned by This Module
+2.1 site_content
+{
+  "_id": ObjectId,
+  "section": "hero | about | footer | contact | seo_home | social_links",
+  "content": {
+    /* shape varies per section, see 2.1.1–2.1.6 below */
+  },
+  "updated_at": "datetime",
+  "updated_by": "admin_user_id"
+}
+
+One document per section, section is unique. Rather than one giant flexible blob, each section has a known, validated shape — flexible enough for Asil to edit freely, but not so freeform that the frontend can't render it predictably.
+2.1.1 hero
+{
+  "headline": "string",
+  "subheadline": "string",
+  "background_video_url": "cloudinary_url or null",
+  "background_image_url": "cloudinary_url",
+  "cta_text": "string",
+  "cta_link": "string"
+}
+
+2.1.2 about
+{
+  "title": "string",
+  "body_text": "string (rich text / markdown)",
+  "images": ["cloudinary_url"],
+  "founder_name": "string",
+  "founder_photo": "cloudinary_url or null"
+}
+
+2.1.3 footer
+{
+  "tagline": "string",
+  "quick_links": [ { "label","url" } ],
+  "business_hours": "string"
+}
+
+2.1.4 contact
+{
+  "phone": "string",
+  "whatsapp_number": "string",
+  "email": "string",
+  "address": "string",
+  "map_embed_url": "string or null"
+}
+
+2.1.5 seo_home
+{
+  "meta_title": "string",
+  "meta_description": "string",
+  "og_image": "cloudinary_url or null"
+}
+
+2.1.6 social_links
+{
+  "instagram": "string (url)",
+  "facebook": "string or null",
+  "youtube": "string or null"
+}
+
+Indexes
+section — unique
+
+3. Folder Structure (Flask)
+app/
+  models/
+    site_content.py
+  services/
+    site_content_service.py
+    media_upload_service.py     — THE shared Cloudinary wrapper (see Section 5)
+  routes/
+    site_content_routes.py       — public
+    admin_site_content_routes.py — admin
+    media_routes.py              — admin media upload
+  utils/
+    cloudinary_helper.py         — low-level Cloudinary SDK wrapper, used BY media_upload_service
+    content_schema_validator.py  — validates content{} shape matches its section's expected fields
+
+4. API Contract
+Standard response shapes as established in prior modules.
+4.1 Public Routes
+GET /api/site-content/:section
+Success 200: { "success": true, "data": { "section","content" } }
+Errors: 404 — unknown section, or content not yet seeded
+ 
+Recommended: seed all 6 sections with sensible defaults at project setup
+so this route never legitimately 404s in production — an empty/missing
+hero section would break the homepage.
+
+Optionally, add a bulk convenience route to save the frontend multiple round-trips on initial homepage load:
+GET /api/site-content?sections=hero,footer,social_links
+Success 200: { "success": true, "data": { "hero":{...}, "footer":{...}, "social_links":{...} } }
+
+4.2 Admin Routes (require @require_admin)
+GET /api/admin/site-content/:section
+Same as public but no restrictions on which sections are visible (public
+route could later restrict certain sections from ever being public-facing
+if new internal-only sections are added — not needed for the current 6).
+
+PUT /api/admin/site-content/:section
+Body: { "content": {...} }
+- Validates the incoming content{} shape against that section's expected
+  schema (content_schema_validator) — reject with 400 + field errors on
+  mismatch, don't let malformed content reach the live site and break
+  the homepage rendering.
+- Full replace of the content object, not a deep patch — simplest
+  contract for the admin CMS forms to reason about (each section has its
+  own dedicated admin form matching its known shape).
+Success 200: { "success": true, "message": "Content updated", "data": {...} }
+
+5. Shared Media Upload Utility — Consolidation
+This has been flagged as a duplication risk across Modules 3 (product images), 5 (AI preview images), and 9 (review images). This module owns the canonical implementation; the others call into it rather than each writing their own Cloudinary wrapper.
+# app/utils/cloudinary_helper.py — low-level SDK calls only
+def upload_image(file_or_url, folder: str, tags: list = None) -> dict:
+    """Returns { "url", "public_id", "width", "height", "format" }"""
+ 
+def delete_image(public_id: str) -> bool:
+
+# app/services/media_upload_service.py — business-level wrapper
+def upload_to_folder(file, folder_name: str) -> str:
+    """folder_name examples: 'galxy/products', 'galxy/ai-previews',
+       'galxy/reviews', 'galxy/site-content', 'galxy/categories'
+       Returns the resulting Cloudinary URL."""
+
+Each consuming module passes its own folder name so uploads stay organized in Cloudinary's dashboard (Asil or Yasar reviewing media storage can tell at a glance what's a product photo vs. an AI-generated preview vs. a review image), while all going through one audited, consistent upload path — one place to add file-size limits, format restrictions, and error handling rather than four.
+POST /api/admin/media/upload
+General-purpose admin upload endpoint, used by the Site Content admin
+forms (hero background, about images, etc.) and available for any other
+admin screen that needs an ad-hoc image without a dedicated endpoint of
+its own.
+Multipart form: file, folder (optional, defaults to 'galxy/general')
+Success 200: { "success": true, "data": { "url","public_id" } }
+
+Coordination note: Modules 3, 5, and 9's specs were written referencing "the shared Cloudinary helper" before this module's spec existed — confirm with those three TLs that they import from app/utils/cloudinary_helper.py and app/services/media_upload_service.py as built here, rather than each shipping a parallel implementation. If any of them have already built their own by the time this is read, consolidate during integration, don't leave four versions running in parallel.
+6. Content Validation Rules
+content_schema_validator checks that the submitted content object for a given section contains only expected keys with correct types (string fields aren't objects, URLs are plausible URLs, etc.) — mirrors the spirit of Module 2's attribute_schema validator, but against a fixed set of known section shapes rather than a dynamic schema.
+Rich text fields (about.body_text) should have a reasonable max length enforced server-side (e.g. 5,000 characters) to prevent runaway content breaking page layout.
+URL fields (cta_link, social links, map_embed_url) should be validated as well-formed URLs before saving, to avoid silently broken links on the live site.
+
+7. What This Module Does NOT Do
+Does not manage category or product images beyond providing the shared upload utility they call into — the actual product.images / category.cover_image fields are written by Modules 2 and 3 respectively, using this module's media_upload_service.
+Does not manage AI-generated images (Module 5 calls the shared uploader directly, uploading to its own galxy/ai-previews folder).
+Does not manage review images (Module 9 calls the shared uploader, uploading to galxy/reviews).
+Does not handle SEO for individual product/category pages — seo_home covers only the homepage; if per-product/per-category SEO metadata is needed later, that likely belongs as fields directly on those documents (Modules 2/3), not centralized here — flag as a future scope question, not building it in v1 unless requested.
+
+8. Handoff Contract for Other Teams
+Treat as frozen from Day 1:
+
+Contract Item
+Detail
+Shared upload function
+media_upload_service.upload_to_folder(file, folder_name) — the single upload function every other module should call for any Cloudinary upload need. Returns a plain URL string, ready to store directly on whatever document needs it.
+Content fetch
+GET /api/site-content/:section — used by the frontend to hydrate homepage hero, footer, contact info, and social links; frontend should never hardcode this content, always fetch it, so Asil's edits go live immediately without a redeploy (this is the module's entire reason for existing — treat any hardcoded content that bypasses this as a bug).
+Fixed section enum
+All six section values (hero, about, footer, contact, seo_home, social_links) are fixed enum values for v1 — if a new content section is needed later (e.g. a dedicated FAQ section), it should be added here as a seventh known shape, not bolted onto an existing section's content object.

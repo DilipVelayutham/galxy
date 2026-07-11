@@ -1,0 +1,155 @@
+
+GALXY
+Custom Lighting & Craft Studio
+Module 12 — Admin Dashboard & Analytics
+Team Lead Module Specification
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Stack: Flask · MongoDB · Cloudinary · Next.js · Tailwind CSS · React
+Document Date: July 2026
+
+Table of Contents
+
+
+
+1. Scope
+The final module ties everything together for Asil's daily use — a single home screen when he logs into the admin panel, plus lightweight analytics views across products, categories, and AI usage. This module owns no primary data of its own; it exclusively aggregates and reads data already owned by Modules 2, 3, 5, 8, and 9. Its entire job is to answer “how's the business doing right now?” in one glance, without Asil having to click through eight separate screens.
+Because it's aggregation-only, this is a good module to build last among the backend teams (Modules 1–11 should have real data flowing before this module's queries have anything meaningful to aggregate) — flag this sequencing note, though with 50 interns working in parallel it can still be scaffolded early against seed data.
+
+2. Collection Owned by This Module
+None. This module reads from orders, products, categories, ai_generations, and reviews — all owned by their respective modules. It writes nothing back to any of them.
+If dashboard queries prove too slow to run live at scale later, a dashboard_snapshots collection (pre-computed daily aggregates, refreshed on a schedule) could be introduced as an optimization — not needed for v1 at this business's expected order volume. Flag as a future consideration only.
+
+3. Folder Structure (Flask)
+app/
+  services/
+    dashboard_service.py       — orchestrates the main stats aggregation
+    product_analytics_service.py
+    ai_usage_analytics_service.py
+  routes/
+    admin_dashboard_routes.py
+
+No models directory — this module has no schema of its own to define.
+
+4. API Contract
+Standard response shapes as established across all prior modules. All routes require @require_admin.
+4.1 Main Dashboard Stats
+GET /api/admin/dashboard/stats
+Query: date_from?, date_to? (defaults to last 30 days if omitted)
+
+Success 200:
+{ "success": true, "data": {
+  "orders_by_status": {
+    "received": 4, "reviewed": 2, "quote_sent": 3, "confirmed": 5,
+    "in_production": 6, "ready": 1, "out_for_delivery": 2,
+    "delivered": 38, "cancelled": 3
+  },
+  "total_orders_in_range": 64,
+  "estimated_revenue_in_range": 187400,
+  "pending_review_count": 5,
+  "top_categories": [
+    { "category_name": "Neon Name Boards", "order_count": 22 },
+    { "category_name": "Quilling", "order_count": 15 }
+  ],
+  "pending_reviews_to_moderate": 3
+} }
+
+estimated_revenue_in_range is the sum of final_quoted_price where set, falling back to estimated_total for orders not yet quoted — label this clearly as an ESTIMATE in the UI, since final_quoted_price is the only real number and many orders won't have one yet.
+pending_review_count is orders sitting in “received” or “reviewed” for more than 24 hours, surfaced as an actionable “needs your attention” count.
+This single endpoint should power the entire admin homepage landing view — the goal is Asil opens the admin panel and immediately sees what needs his attention (pending_review_count, pending_reviews_to_moderate) alongside general business health, without navigating anywhere first.
+
+4.2 Product Analytics
+GET /api/admin/analytics/products
+Query: category_id?, date_from?, date_to?, sort ("views" | "wishlist_adds" | "orders")
+
+{ "success": true, "data": [
+  {
+    "product_id","title","category_name",
+    "views",
+    "wishlist_count",
+    "order_count",
+    "conversion_rate"
+  }
+], "page","limit","total","totalPages" }
+
+Field notes
+views — direct from product.views (Module 3).
+wishlist_count — computed by counting occurrences of this product_id across all wishlists.product_ids (Module 7) — requires an aggregation query, not a stored field, since Module 7 deliberately doesn't maintain a denormalized counter on the product itself.
+order_count — count of orders (Module 8) containing this product_id.
+conversion_rate — order_count / views, as a rough interest-to-commitment signal; clearly caveat in the UI that this is directional, not precise (views include repeat visits, not unique visitors, unless Module 3 is later extended to track that distinction).
+
+4.3 AI Usage Analytics
+GET /api/admin/analytics/ai-usage
+Query: category_id?, date_from?, date_to?
+
+{ "success": true, "data": {
+  "total_generations": 412,
+  "successful": 389,
+  "failed": 23,
+  "cache_hit_rate": 0.34,
+  "generations_by_category": [
+    { "category_name": "Neon Name Boards", "count": 210 }
+  ],
+  "avg_generation_time_ms": 3200
+} }
+
+cache_hit_rate requires ai_generations to be queryable for cache-served vs. fresh-generated results. If Module 5's schema doesn't currently persist a boolean distinguishing cached responses, flag this back to Module 5's Team Lead — Module 5's specification notes cache hits are still logged as new ai_generations records, so this needs an agreed field (e.g. served_from_cache: true) to compute accurately.
+
+Coordination flag for Module 5's Team Lead: confirm whether ai_generations documents currently capture a served_from_cache boolean. If not, this is a small addition to Module 5's write path (not this module's) — Module 12 can only aggregate what's actually stored.
+
+5. Query Performance Notes
+All aggregations should use MongoDB's aggregation pipeline ($match, $group, $lookup where unavoidable) rather than pulling full collections into Python and computing in application code — especially orders_by_status and top_categories, which will run every time Asil opens the dashboard.
+wishlist_count in product analytics (Section 4.2) is the one genuinely expensive cross-collection query in this module, since it requires scanning wishlists.product_ids arrays rather than a simple indexed field lookup. If this proves slow in practice at scale, consider asking Module 7's team to maintain a denormalized wishlist_count counter directly on relevant products (incremented/decremented on add/remove) as a future optimization — not required for v1 given the expected data volume, but worth flagging now rather than discovering it as a surprise later.
+Cache the dashboard stats response for a short window (e.g. 60 seconds) server-side if Asil is expected to refresh the page frequently — avoids re-running the full aggregation on every single load. Simple in-memory or Flask-level caching is sufficient; no need for a dedicated caching layer (Redis, etc.) at this scale.
+
+6. What This Module Does NOT Do
+Does not own or write to any collection — pure read-only aggregation across other modules' data.
+Does not modify orders, products, or any other document — this is strictly a reporting layer, never a mutation path. If an admin needs to act on something surfaced here (e.g. pending_review_count), the dashboard links out to the relevant module's own admin screen (Module 8's order list, Module 9's review queue) rather than duplicating those actions here.
+Does not track raw traffic/visitor analytics (page views, session data, funnels) — that's a much larger scope (e.g. a proper analytics tool) explicitly not part of this project; the “views” figure used here is Module 3's simple per-product counter, nothing more sophisticated.
+Does not send any notifications or alerts itself (Module 11 owns all notification delivery) — this module is purely a pull/on-demand view, not a push system.
+
+7. Handoff Contract for Other Teams
+This module is a consumer of everyone else's frozen contracts, not a producer of new ones — but it does have two dependencies worth flagging back upstream:
+To Module 5's Team Lead: confirm/add a served_from_cache boolean on ai_generations documents so cache_hit_rate can be computed accurately (Section 4.3).
+To Module 7's Team Lead: no change needed for v1, but flagged as a possible future optimization if wishlist_count aggregation proves slow — a denormalized counter on products would resolve it (Section 5).
+To all modules: this module assumes every collection's created_at field is a proper indexed datetime, not a string — every prior module's specification has specified this correctly, so no action needed, just confirming the assumption this module's date-range filtering relies on.
+
+8. Summary — All 12 Modules
+#
+Module
+Owns
+1
+Auth & User Accounts
+users, admin_users
+2
+Categories
+categories (incl. attribute_schema engine)
+3
+Products
+products
+4
+Configurator & Pricing Engine
+(computation only)
+5
+AI Preview Generation
+ai_generations
+6
+Cart
+carts
+7
+Wishlist
+wishlists
+8
+Orders & Status Tracking
+orders
+9
+Reviews & Testimonials
+reviews, testimonials
+10
+Site Content / CMS
+site_content + shared media upload
+11
+Notifications
+notifications
+12
+Admin Dashboard & Analytics
+(read-only aggregation)

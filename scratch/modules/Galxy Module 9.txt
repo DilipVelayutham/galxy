@@ -1,0 +1,192 @@
+
+GALXY
+Custom Lighting & Craft Studio
+Module 9 — Reviews & Testimonials
+Verified-Purchase Reviews · Admin Moderation · Curated Testimonials
+Consumer of Module 8 (Orders) · Writes to Module 3 (Products) Rating Fields
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Stack: Flask · MongoDB
+Document Date: July 2026
+
+1. Scope
+This module owns two related but distinct content types:
+Product Reviews — customer-submitted ratings/comments tied to a specific delivered order, shown on product pages.
+Testimonials — a curated, admin-selected subset of content (could be pulled from reviews, or entered independently by Asil) shown on the homepage/marketing sections for social proof.
+
+Reviews are earned and gated (only from real delivered orders); testimonials are curated (Asil has full editorial control over what represents the brand on the homepage). Keep these as clearly separate concepts even though they'll likely overlap in practice.
+
+2. Collections Owned by This Module
+2.1 reviews
+{
+  "_id": ObjectId,
+  "product_id": ObjectId,
+  "user_id": ObjectId,
+  "order_id": ObjectId,
+  "order_number": "string (denormalized for admin display)",
+  "rating": 5,
+  "comment": "string",
+  "images": ["cloudinary_url"],
+  "customer_name": "string (snapshot, in case account is later deleted)",
+  "is_approved": false,
+  "is_featured": false,
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+
+2.2 testimonials
+{
+  "_id": ObjectId,
+  "source": "review | manual",
+  "review_id": "ObjectId or null (if sourced from a review)",
+  "customer_name": "string",
+  "customer_location": "string, e.g. 'Chennai'",
+  "quote": "string",
+  "rating": 5,
+  "image": "cloudinary_url or null",
+  "display_order": 1,
+  "is_active": true,
+  "created_at": "datetime"
+}
+
+Indexes
+reviews.product_id — primary lookup for product pages
+reviews.is_approved — filter index, public routes only ever return approved reviews
+reviews.user_id + reviews.order_id — for the "did this user already review this order's items" check
+testimonials.is_active, display_order — for homepage query
+
+3. Folder Structure (Flask)
+app/
+  models/
+    review.py
+    testimonial.py
+  services/
+    review_service.py         — create, approve/reject, list, rating rollup
+    testimonial_service.py    — CRUD, promote-from-review
+    rating_rollup_service.py  — recalculates product.rating_avg / rating_count
+  routes/
+    review_routes.py          — public + customer submission
+    admin_review_routes.py    — moderation
+    testimonial_routes.py     — public
+    admin_testimonial_routes.py
+
+4. Review Eligibility — "Verified Purchase" Gate
+A customer can only review a product if they have a delivered order containing that product. This is enforced via Module 8's exposed helper:
+order_service.has_delivered_order_for_product(user_id, product_id)
+→ returns { eligible: bool, order_id, order_number } or { eligible: false }
+
+Called at the start of POST /api/products/:id/reviews — reject with 403 if not eligible. This also naturally prevents duplicate reviews if combined with a uniqueness check: one review per (user_id, product_id, order_id) combination — a customer who orders the same product twice (two separate delivered orders) is allowed to leave two separate reviews, since those are genuinely different production experiences. Enforce this as a compound check in review_service.create(), not a hard DB unique index (since the eligibility logic itself is more nuanced than a simple constraint can express).
+
+5. Moderation Flow
+All reviews start is_approved: false. Nothing a customer submits appears publicly until Asil approves it — this is a deliberate editorial control point, not a spam-prevention afterthought, since a craft business's public reputation matters a lot and Asil should see every review before it's live.
+1. Customer submits review → is_approved: false, invisible on product page
+2. Admin sees it in a pending-review queue (GET /api/admin/reviews?is_approved=false)
+3. Admin approves → is_approved: true → immediately visible on product page,
+   triggers rating_rollup_service to recalculate that product's rating_avg/rating_count
+   OR
+   Admin rejects → review stays is_approved: false permanently (soft-rejected,
+   not deleted, in case Asil wants to revisit — add a rejected_reason field if
+   useful, optional)
+
+Rating rollup only ever includes is_approved: true reviews — a rejected or pending review must never influence the visible star rating.
+6. Rating Rollup — Ownership Boundary with Module 3
+product.rating_avg and product.rating_count live on the product document (Module 3 owns the schema field), but this module writes to them. This was flagged in Module 3's spec as a cross-module write — confirming the exact mechanism here:
+# rating_rollup_service.py
+def recalculate_product_rating(product_id):
+    approved_reviews = reviews_collection.find({"product_id": product_id, "is_approved": True})
+    ratings = [r["rating"] for r in approved_reviews]
+    avg = round(sum(ratings) / len(ratings), 1) if ratings else 0
+    count = len(ratings)
+    products_collection.update_one(
+        {"_id": product_id},
+        {"$set": {"rating_avg": avg, "rating_count": count}}
+    )
+
+Called after every approve/reject/delete action that changes a review's is_approved status. Module 3's team should not write to these two fields from anywhere in their own code — this function is the single writer. Flag this explicitly to Module 3's TL to avoid two modules racing to update the same fields differently.
+7. API Contract
+Standard response shapes as established in prior modules.
+7.1 Public Routes
+GET /api/products/:id/reviews
+Query: page, limit, sort ("newest" | "highest_rated" | "lowest_rated")
+Success 200: { "success": true, "data": [
+  { "_id","customer_name","rating","comment","images","created_at" }
+], "page","limit","total","totalPages" }
+Only returns is_approved: true reviews. user_id and order_id are never
+exposed in the public response — customer_name (snapshot) is sufficient.
+
+GET /api/testimonials
+Success 200: { "success": true, "data": [
+  { "customer_name","customer_location","quote","rating","image" }
+] }
+Only is_active: true, sorted by display_order. Used on homepage.
+
+7.2 Customer Routes (require @require_auth)
+POST /api/products/:id/reviews
+Body: { "rating" (1-5), "comment", "images"? }
+ 
+Flow:
+1. Check eligibility via order_service.has_delivered_order_for_product()
+   → 403 if not eligible, with a clear message
+2. Check for existing review on this exact (user_id, product_id, order_id)
+   → 409 if already reviewed
+3. Create review, is_approved: false, customer_name snapshotted from
+   Module 1's user profile
+4. Do NOT run rating_rollup yet — rating only updates on admin approval
+ 
+Success 201: { "success": true, "message": "Review submitted, pending approval", "data": {...} }
+Errors:
+  403 — not eligible (no delivered order for this product)
+  409 — already reviewed this order's purchase of this product
+
+7.3 Admin Routes (require @require_admin)
+GET /api/admin/reviews
+Query: is_approved (filter pending vs approved), product_id, page, limit
+Success 200: full list including user_id, order_number, moderation status.
+
+PUT /api/admin/reviews/:id/approve
+Success 200: sets is_approved: true, triggers rating_rollup_service,
+             returns updated review.
+
+PUT /api/admin/reviews/:id/reject
+Body: { "reason"? }
+Success 200: leaves is_approved: false, optionally logs reason,
+             triggers rating_rollup_service (in case it was previously
+             approved and is being un-approved — rollup must exclude it now).
+
+DELETE /api/admin/reviews/:id
+Hard delete allowed here (unlike products/categories/orders) — reviews
+are user-generated content Asil should be able to fully remove if
+genuinely inappropriate, not just soft-hide. Triggers rating_rollup_service
+if the deleted review was approved.
+
+POST /api/admin/reviews/:id/promote-to-testimonial
+Body: { "customer_location"?, "display_order"? }
+Convenience endpoint: copies an approved review's content into a new
+testimonials document (source: "review", review_id: linked) rather than
+Asil re-typing a good review by hand. Sets is_active: true by default.
+Success 201: { "success": true, "data": {...new testimonial...} }
+
+Testimonial CRUD
+POST   /api/admin/testimonials         — manual entry, source: "manual"
+PUT    /api/admin/testimonials/:id
+DELETE /api/admin/testimonials/:id     — hard delete acceptable, same reasoning as reviews
+PUT    /api/admin/testimonials/reorder
+Body: { "order": [ { "testimonial_id","display_order" } ] }
+Bulk reorder, same pattern as Module 2's category reorder endpoint.
+
+8. What This Module Does NOT Do
+Does not determine review eligibility logic itself — delegates entirely to Module 8's has_delivered_order_for_product() helper, never re-implements order-status checking.
+Does not own the product.rating_avg/rating_count field definitions (Module 3 does) — only writes to them via the single rollup function.
+Does not handle general Cloudinary upload wiring beyond calling the shared helper (flagged for consolidation back in Modules 3/5/10) for review image uploads.
+Does not auto-publish anything — every review requires explicit admin approval before public visibility, no exceptions, no auto-approve threshold in v1.
+
+9. Handoff Contract for Other Teams
+Treat as frozen from Day 1:
+
+Contract Item
+Detail
+Single writer
+rating_rollup_service.recalculate_product_rating(product_id) — the only function permitted to write product.rating_avg/rating_count; Module 3 must not write these fields anywhere in its own service code.
+Public response fields
+Public review response never includes user_id or order_id — any frontend or module consuming this endpoint should not expect or depend on those fields being present.
+403 semantics
+POST /api/products/:id/reviews returning 403 specifically communicates "not a verified delivered purchase" — frontend should show a clear explanatory message here, not a generic error, since this will be a common and expected response for most site visitors.

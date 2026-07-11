@@ -1,0 +1,9 @@
+Flask==3.0.3
+pymongo==4.7.2
+python-dotenv==1.0.1
+Flask-Cors==4.0.1
+pytest==8.2.2
+mongomock==4.1.2
+setuptools<81
+dnspython>=2.6.0
+PyJWT==2.8.0

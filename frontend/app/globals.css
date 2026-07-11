@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0B0B0F;
+  --foreground: #F4F4F7;
+}
+
+@theme {
+  --color-bg-void: #0B0B0F;
+  --color-surface-panel: #16161C;
+  --color-neon-pink: #FF2E8A;
+  --color-neon-blue: #18E7FF;
+  --color-neon-violet: #9B5CFF;
+  --color-neon-yellow: #FFD84D;
+  --color-text-primary: #F4F4F7;
+  --color-text-muted: #8A8A97;
+  
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-poppins);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), sans-serif;
+  overflow-x: hidden;
+}
+
+/* Neon text shadow glows */
+.text-glow-pink {
+  text-shadow: 0 0 4px rgba(255, 46, 138, 0.6), 0 0 12px rgba(255, 46, 138, 0.3);
+}
+
+.text-glow-blue {
+  text-shadow: 0 0 4px rgba(24, 231, 255, 0.6), 0 0 12px rgba(24, 231, 255, 0.3);
+}
+
+.text-glow-violet {
+  text-shadow: 0 0 4px rgba(155, 92, 255, 0.6), 0 0 12px rgba(155, 92, 255, 0.3);
+}
+
+.text-glow-yellow {
+  text-shadow: 0 0 4px rgba(255, 216, 77, 0.6), 0 0 12px rgba(255, 216, 77, 0.3);
+}
+
+/* Neon box glows */
+.shadow-glow-pink {
+  box-shadow: 0 0 12px rgba(255, 46, 138, 0.25), 0 0 24px rgba(255, 46, 138, 0.1);
+}
+
+.shadow-glow-blue {
+  box-shadow: 0 0 12px rgba(24, 231, 255, 0.25), 0 0 24px rgba(24, 231, 255, 0.1);
+}
+
+.shadow-glow-violet {
+  box-shadow: 0 0 12px rgba(155, 92, 255, 0.25), 0 0 24px rgba(155, 92, 255, 0.1);
+}
+
+.shadow-glow-yellow {
+  box-shadow: 0 0 12px rgba(255, 216, 77, 0.25), 0 0 24px rgba(255, 216, 77, 0.1);
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(22, 22, 28, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(244, 244, 247, 0.08);
+}
+
+/* Neon Flicker Animation */
+@keyframes neon-flicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+    text-shadow: 0 0 4px currentColor, 0 0 12px currentColor;
+    opacity: 1;
+  }
+  20%, 24%, 55% {
+    text-shadow: none;
+    opacity: 0.7;
+  }
+  22% {
+    text-shadow: none;
+    opacity: 0.3;
+  }
+}
+
+.animate-flicker {
+  animation: neon-flicker 4s infinite alternate;
+}

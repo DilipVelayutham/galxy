@@ -1,0 +1,142 @@
+
+GALXY
+Custom Lighting & Craft Studio
+Module 11 — Notifications
+Team Lead Module Specification
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Stack: Flask · MongoDB · Cloudinary · Next.js · Tailwind CSS · React
+Document Date: July 2026
+
+Table of Contents
+
+
+
+1. Scope
+This module owns the customer-facing notification feed and the underlying delivery mechanisms (in-app + optionally email) that other modules trigger events into. It is deliberately built as a thin event receiver — it does not decide when something notification-worthy happens (that's each originating module's job), it only decides how to deliver and store the resulting message once told to.
+This keeps notification logic out of Orders, AI Generation, Reviews, etc. — those modules just call one simple trigger function and move on, without needing to know or care how delivery actually works underneath.
+
+2. Collection Owned by This Module
+2.1 notifications
+{
+  "_id": ObjectId,
+  "user_id": ObjectId,
+  "type": "order_status_changed | order_received | review_approved | general",
+  "title": "string",
+  "message": "string",
+  "related_order_number": "string or null",
+  "related_product_id": "ObjectId or null",
+  "is_read": false,
+  "created_at": "datetime"
+}
+
+2.2 Indexes
+user_id + is_read — for the “unread count” badge query, the most frequent read pattern
+created_at — for sorting the notification feed newest-first
+
+3. Folder Structure (Flask)
+app/
+  models/
+    notification.py
+  services/
+    notification_service.py     — create, list, mark-read (the public trigger API)
+    email_delivery_service.py   — optional SMTP send, invoked by notification_service
+  routes/
+    notification_routes.py
+  configs/
+    smtp_config.py               — SHARED with Module 1 (see coordination note below)
+
+4. Trigger API — What Other Modules Call
+This is the module's real interface — the HTTP routes exist for the frontend, but the cross-module contract is a simple importable function every other service calls directly:
+# notification_service.py
+
+def notify_user(user_id, type, title, message,
+                 related_order_number=None, related_product_id=None,
+                 send_email=False):
+    """
+    1. Insert a notifications document (always — this is the in-app feed,
+       source of truth for the bell icon)
+    2. If send_email=True, also call email_delivery_service to send a
+       matching email via SMTP (best-effort, failure here should NEVER
+       roll back the notification record or the calling module's own
+       operation — log and move on)
+    """
+
+4.1 Modules That Call This, and When
+Calling Module
+Event
+type
+send_email
+Module 8 (Orders)
+Order placed
+order_received
+Yes
+Module 8 (Orders)
+Status changed
+order_status_changed
+Yes
+Module 9 (Reviews)
+Review approved
+review_approved
+No (in-app only, low urgency)
+Module 10 (Site Content) / Admin
+Any manual admin broadcast (rare, optional)
+general
+Optional
+
+Confirm this exact function signature with Modules 8 and 9's Team Leads before either builds their trigger calls — this is listed as a dependency in both of their specifications already (Module 8's specification explicitly named order_created and order_status_changed events).
+
+5. Email Delivery — Shared SMTP Configuration
+Important coordination note: Module 1 (Auth) already owns SMTP config for password-reset emails (SMTP_HOST, SMTP_PORT, SMTP_EMAIL, SMTP_PASSWORD). Do not create a second, separate SMTP configuration here. This module's email_delivery_service.py should import and reuse Module 1's existing SMTP connection setup rather than duplicating credentials/config in a second smtp_config.py.
+Confirm with Module 1's Team Lead on the exact shared function signature (likely something like send_email(to, subject, body_html) living in a genuinely shared location, e.g. app/utils/email_helper.py, that both modules import from — not owned twice).
+
+5.1 Best-Effort, Non-Blocking
+Email is treated as best-effort and non-blocking:
+Failure to send an email must never fail the calling module's operation (an order must still be created successfully even if the confirmation email fails to send).
+Wrap all email sending in try/except, log failures, but always let the in-app notification (the database write) succeed independently.
+
+6. API Contract
+Standard response shapes as established across all prior modules. All routes require @require_auth.
+6.1 Get Notifications
+GET /api/notifications
+Query: page, limit, is_read (optional filter)
+
+{ "success": true, "data": [
+  { "_id","type","title","message","related_order_number","is_read","created_at" }
+], "page","limit","total","totalPages",
+  "unread_count": 3
+}
+
+unread_count is always included at top level, regardless of filters, so the frontend bell icon badge can update from this same call without a separate request.
+
+6.2 Mark Single Notification Read
+PUT /api/notifications/:id/read
+
+Success 200: { "success": true, "data": {...updated notification...} }
+Errors: 404 — not found or belongs to a different user (same "don't leak
+        existence" principle as Module 8's order lookup — 404 for both
+        cases, not 403)
+
+6.3 Mark All Read
+PUT /api/notifications/read-all
+
+Marks all of the current user's unread notifications as read in one call (used when the customer opens the notification dropdown/panel).
+Success 200: { "success": true, "message": "All marked as read", "data": { "updated_count": 3 } }
+
+7. Admin-Side Notification (Asil Getting Alerted to New Orders)
+Flagged in Module 8's specification as needing coordination: when a new order arrives, Asil himself needs to know, ideally faster than “happens to check the admin dashboard.” Two reasonable options — pick one for v1 rather than over-building both:
+7.1 Simplest (Recommended for v1)
+Email Asil directly via email_delivery_service whenever order_service.checkout() completes — a single hardcoded admin notification email address (from admin settings, or simply Asil's admin_users email), sent alongside (not instead of) the customer's own confirmation email.
+7.2 Richer (Future Consideration, Not Required for v1)
+An admin-side unread-badge on the admin dashboard, functionally identical to the customer notification feed but scoped to admin_users instead of users. Only build this if Asil finds email alone insufficient in practice — don't pre-build complexity that may not be needed.
+
+8. What This Module Does NOT Do
+Does not decide when to notify — every notification is triggered by another module's explicit call into notify_user(); this module never independently watches for events across the database.
+Does not own SMTP credentials — reuses Module 1's shared email configuration/helper, never duplicates it.
+Does not send SMS or push notifications in v1 — email + in-app feed only. Flag as a future scope item if requested later, don't build the infrastructure speculatively now.
+Does not build a full admin notification center in v1 — a direct email to Asil on new orders is sufficient to start; richer admin-side alerting is optional future scope per Section 7.
+
+9. Handoff Contract for Other Teams
+Treat as frozen from Day 1:
+notification_service.notify_user(user_id, type, title, message, related_order_number=None, related_product_id=None, send_email=False) — the one function every other module calls. Any module needing to notify a customer imports this directly; none should write to the notifications collection themselves.
+GET /api/notifications always returns unread_count at the top level of the response, independent of any is_read filter applied to the list itself — frontend bell icon badge depends on this being present on every call, not a separate endpoint.
+Email sending is fire-and-forget from the calling module's perspective — Modules 8 and 9 should call notify_user() and continue immediately; they must never await/block on email delivery success before returning their own HTTP response.

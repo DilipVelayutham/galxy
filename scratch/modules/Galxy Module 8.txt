@@ -1,0 +1,219 @@
+
+GALXY
+Custom Lighting & Craft Studio
+Module 8 — Orders & Status Tracking
+Checkout (No Payment) · Live Status Tracker · Admin Order Management
+Consumer of Module 4 (Pricing), Module 6 (Cart) & Module 11 (Notifications)
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Stack: Flask · MongoDB
+Document Date: July 2026
+
+1. Scope
+This is the most operationally critical module in the platform — it's where a cart becomes a real commitment, and where Asil runs his actual business day-to-day. It owns order creation (checkout, no payment), the customer-facing order history and live status tracker, and the admin-side order management screen Asil will open more than any other page in the CMS.
+Because there's no payment gateway, this module's checkout is really a structured handoff: capture everything needed for Asil to review and quote manually, then give the customer a stable reference (order_number) and a transparent status timeline they can follow without having to call and ask "where's my order?"
+
+2. Collection Owned by This Module
+2.1 orders
+{
+  "_id": ObjectId,
+  "order_number": "GLX-2026-00042",
+  "user_id": ObjectId,
+  "customer_snapshot": {
+    "name": "string",
+    "phone": "string",
+    "email": "string",
+    "address": { "line1","line2","city","state","pincode" }
+  },
+  "items": [
+    {
+      "product_id": ObjectId,
+      "product_title": "string",
+      "category_id": ObjectId,
+      "category_name": "string",
+      "selected_attributes": {},
+      "quantity": 1,
+      "unit_price_estimate": 1799,
+      "line_total_estimate": 1799,
+      "price_breakdown": [ /* from Module 4 */ ],
+      "ai_preview_image": "cloudinary_url or null",
+      "reference_image": "cloudinary_url or null",
+      "custom_text": "string or null"
+    }
+  ],
+  "estimated_total": 5397,
+  "final_quoted_price": null,
+  "status": "received",
+  "status_history": [
+    {
+      "status": "received",
+      "note": "string or null",
+      "updated_by": "system | admin_user_id",
+      "timestamp": "datetime"
+    }
+  ],
+  "admin_notes": "string, internal only, never shown to customer",
+  "customer_visible_note": "string or null",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+
+Indexes
+order_number — unique
+user_id — for customer's order history
+status — filter index, heavily used by the admin orders screen
+created_at — for sorting/date filtering
+
+3. Folder Structure (Flask)
+app/
+  models/
+    order.py
+  services/
+    order_service.py         — checkout, get, list, status updates
+    order_number_service.py  — generates sequential GLX-YYYY-##### numbers
+    notification_trigger_service.py — calls Module 11 on status change
+  routes/
+    order_routes.py          — customer-facing
+    admin_order_routes.py    — admin management
+
+4. Order Number Generation
+Format: GLX-{year}-{5-digit sequential} e.g. GLX-2026-00042.
+Use an atomic MongoDB counter document (a small counters collection with { "_id": "order_2026", "seq": 42 }, incremented via findOneAndUpdate with $inc) rather than counting existing documents — counting is not safe under concurrent checkouts and can produce duplicate numbers. Reset the sequence per calendar year (new counter document each year) so numbers stay short and readable rather than growing unbounded.
+
+5. Checkout Flow — order_service.checkout()
+This is the single most important function in the module. It must be defensive, since it's the final gate before something becomes a real business commitment.
+1. Fetch the customer's cart (Module 6)
+   → if empty, reject with 400 ("Cart is empty")
+ 
+2. For EACH item in the cart, re-run BOTH:
+   a. Module 4's validate_attributes() against the item's category
+      → if any item now fails validation (schema changed since it was
+        added to cart), reject the ENTIRE checkout with 400, listing
+        which item(s) failed and why — do not silently drop items or
+        partially check out
+   b. Module 4's calculate_price() fresh, using CURRENT product base_price
+      and CURRENT category attribute deltas
+      → this may differ from what was shown in the cart if Asil edited
+        pricing since the item was added — use the freshly calculated
+        number as the authoritative estimated_total, never the cart's
+        stored estimate
+ 
+3. Also re-check each item's product/category is_active
+   → if any referenced product or category was deactivated since being
+     added to cart, reject checkout for that item specifically (same
+     "flag, don't silently drop" principle as Module 6's stale-cart
+     handling — surface it clearly so the customer can remove that item
+     and retry, rather than checkout silently succeeding minus an item)
+ 
+4. Require a saved address (Module 1) — either passed explicitly in the
+   checkout request or the user's default address
+   → 400 if no address available
+ 
+5. Build the order document:
+   - Generate order_number
+   - Copy customer_snapshot from Module 1's user profile + chosen address
+   - Copy items array with fresh prices from step 2b
+   - estimated_total = sum of all line_total_estimate
+   - status: "received"
+   - status_history: single entry { status: "received", updated_by: "system", timestamp: now }
+ 
+6. Insert order document
+ 
+7. Call Module 6's clear cart function for this user
+ 
+8. Trigger a notification (Module 11) to the customer: "Order GLX-2026-00042 received"
+   AND ideally an internal notification/alert to Asil that a new order
+   has arrived (coordinate exact mechanism — email via Module 1's shared
+   SMTP config, or an admin dashboard badge — with Module 11's team)
+ 
+9. Return the created order to the customer
+
+Steps 6–8 should be treated as a single logical unit — if order insertion (step 6) fails, nothing downstream should run. If cart-clearing (step 7) fails after the order was successfully created, log it as an error to investigate rather than failing the whole checkout response to the customer (the order exists and is real; a stale cart is a minor cleanup issue, not a reason to tell the customer their order didn't go through).
+6. Status Update Flow — order_service.update_status()
+1. Admin selects a new status + optional note on the admin order detail page
+2. Append to status_history: { status, note, updated_by: admin_user._id, timestamp: now }
+3. Update the top-level `status` field to match (top-level status is always
+   the LATEST entry in status_history — never let these two drift apart)
+4. Trigger a customer notification (Module 11) — "Your order is now In
+   Production" + the note if one was provided
+5. Return updated order
+
+Status transition rules (enforce server-side, don't trust the admin frontend alone to prevent invalid transitions)
+Valid sequence: received → reviewed → quote_sent → confirmed → in_production → ready → out_for_delivery → delivered
+cancelled can be set from any status except delivered.
+Forward-only by default — going from in_production back to reviewed shouldn't normally happen. However, don't hard-block backward moves entirely — real businesses sometimes need to correct a mistake (an admin misclicked). Instead, require a note to be mandatory specifically when moving backward or when cancelling, so there's always a human-readable reason attached to anything unusual in the history. Forward moves can have an optional note.
+
+7. API Contract
+Standard response shapes as established in prior modules.
+7.1 Customer Routes (require @require_auth)
+POST /api/orders/checkout
+Body: { "address_id"? (defaults to user's default address) }
+Success 201: { "success": true, "message": "Order placed", "data": {...full order...} }
+Errors:
+  400 — empty cart / invalid items / no address available
+        (data.errors includes per-item detail when relevant)
+
+GET /api/orders
+Success 200: { "success": true, "data": [ {order_number,status,estimated_total,
+  created_at, item_count, thumbnail_preview} ], "page","limit","total","totalPages" }
+List view stays lightweight — no full items array, no status_history.
+
+GET /api/orders/:order_number
+Success 200: { "success": true, "data": {...full order incl. items, status_history...} }
+Errors: 404 — not found, OR belongs to a different user (never leak
+        existence of another user's order via a 403 — always 404 for
+        both "doesn't exist" and "not yours", to avoid order-number
+        enumeration revealing valid order IDs)
+
+Note: admin_notes field is NEVER included in this customer-facing response — strip it server-side before returning, don't rely on frontend to hide it.
+7.2 Admin Routes (require @require_admin)
+GET /api/admin/orders
+Query: status, date_from, date_to, search (matches order_number or
+       customer name/phone), page, limit
+Success 200: full list incl. admin_notes, paginated.
+This is Asil's most-used screen — keep it fast, ensure status and
+created_at are properly indexed.
+
+GET /api/admin/orders/:id
+Full order detail including admin_notes and complete status_history.
+
+PUT /api/admin/orders/:id/status
+Body: { "status", "note"?, "customer_visible_note"? }
+Note becomes mandatory (400 if missing) when status is "cancelled" or
+when the transition is backward per the rules in Section 6.
+Success 200: { "success": true, "data": {...updated order...} }
+
+PUT /api/admin/orders/:id/quote
+Body: { "final_quoted_price" }
+Sets the manually-negotiated final price once Asil has spoken to the
+customer — separate from estimated_total, which stays as the original
+system-calculated figure for reference/comparison.
+Success 200: { "success": true, "data": {...updated order...} }
+
+PUT /api/admin/orders/:id/notes
+Body: { "admin_notes" }
+Internal-only free text, never customer-visible. Full replace, not append
+(unlike status_history, which is append-only) — this is a working scratchpad
+for Asil, not an audit trail.
+
+8. What This Module Does NOT Do
+Does not process payment — there is no payment gateway anywhere in this project; final_quoted_price is informational, settled offline.
+Does not calculate prices independently — always calls Module 4's calculate_price() fresh at checkout time, never reuses cart's stored estimate without re-verifying.
+Does not validate attributes independently — always calls Module 4's validate_attributes().
+Does not send emails/SMS/push directly — delegates all customer/admin notifications to Module 11, this module only triggers them with the right event + data.
+Does not manage cart contents — only reads the cart once at checkout and calls Module 6's clear function afterward.
+
+9. Handoff Contract for Other Teams
+Treat as frozen from Day 1:
+
+Contract Item
+Detail
+order_number
+The customer-facing reference used everywhere (order lookup, support conversations, receipts); _id is internal only.
+status_history[] shape
+The frontend StatusTracker component (per the design system's animated vertical tracker) renders directly from this array; field names (status, note, timestamp) must stay stable.
+Service function
+order_service.checkout(user_id, address_id) — exposed as an importable function in case any other flow ever needs to trigger checkout programmatically (not currently planned, but keep the HTTP route thin and the logic in the service layer regardless, per the pattern established across all prior modules).
+Module 9 dependency
+Module 9 (Reviews) depends on this module's status === "delivered" to gate review submission — expose a simple order_service.has_delivered_order_for_product(user_id, product_id) helper so Module 9 doesn't need to duplicate order-querying logic.
+Module 11 dependency
+Module 11 (Notifications) needs a stable event contract from this module: at minimum order_created and order_status_changed events, each carrying user_id, order_number, status, and note — agree on the exact function signature or event shape with Module 11's TL before either side builds against assumptions.

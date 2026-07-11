@@ -1,0 +1,228 @@
+GALXY
+Website Project — Module Contract & Development Spec
+MODULE 2
+Categories (Public + Admin)
+Category System · Attribute Schema Engine · The Core Configurator Contract
+
+Prepared by LTI Technology  |  Learn · Think · Innovate
+Stack: Flask · MongoDB · Cloudinary
+Document Date: July 2026
+
+1. Scope
+This module owns the category system and the attribute schema engine — the single most important piece of infrastructure in the whole project. Every other module that touches products, configurators, pricing, or AI generation depends on the data structure this module defines and locks on Day 1.
+Priority
+Get the attribute_schema shape right and frozen early — Modules 3 (Products), 4 (Configurator/Pricing), 5 (AI Preview), and the frontend AttributeRenderer component all build directly against it.
+2. Collection Owned by This Module
+2.1 categories
+{
+  "_id": ObjectId,
+  "slug": "neon-name-boards",
+  "name": "Neon Name Boards",
+  "description": "string",
+  "short_tagline": "string",
+  "cover_image": "cloudinary_url",
+  "banner_image": "cloudinary_url",
+  "accent_color": "neon_pink | neon_blue | neon_violet | neon_yellow",
+  "display_order": 1,
+  "is_active": true,
+  "attribute_schema": [ /* see below */ ],
+  "ai_prompt_template": "string with {placeholders}",
+  "seo": {
+    "meta_title": "string",
+    "meta_description": "string"
+  },
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+
+Indexes:
+slug — unique
+display_order — for sorted retrieval
+is_active — filter index (public routes only ever query active categories)
+3. attribute_schema — Deep Spec
+This is an embedded array on the category document, not a separate collection — attributes always belong to exactly one category and are always fetched together with it, so embedding avoids an unnecessary join.
+3.1 Full Attribute Object Shape
+{
+  "attribute_id": "auto-generated uuid or ObjectId string",
+  "key": "font",
+  "label": "Font Style",
+  "type": "select | color_swatch | image_swatch | toggle | slider | text_input | number",
+  "help_text": "Choose the lettering style for your sign",
+  "options": [
+    {
+      "value": "cursive",
+      "label": "Cursive",
+      "price_delta": 0,
+      "preview_image": "cloudinary_url",
+      "hex_color": null
+    },
+    {
+      "value": "bold",
+      "label": "Bold",
+      "price_delta": 150,
+      "preview_image": "cloudinary_url",
+      "hex_color": null
+    }
+  ],
+  "min": null,
+  "max": null,
+  "step": null,
+  "default_value": "cursive",
+  "affects_ai_preview": true,
+  "affects_price": true,
+  "required": true,
+  "display_order": 1,
+  "is_active": true
+}
+
+3.2 Type-Specific Rules
+type
+Uses options?
+Uses min/max/step?
+Notes
+select
+Yes
+No
+Standard dropdown, e.g. shape cut
+color_swatch
+Yes (hex_color per option)
+No
+Renders as clickable color circles
+image_swatch
+Yes (preview_image per option)
+No
+Renders as clickable image thumbnails, e.g. chain style
+toggle
+No
+No
+Boolean on/off, e.g. "Add chain?" — price_delta lives directly on the attribute for the "on" state
+slider
+No
+Yes
+Numeric range, e.g. size in inches — price via formula, not per-option deltas (see Section 4)
+text_input
+No
+No
+Free text, e.g. the name/word to be lettered — never affects price directly, but affects AI preview if affects_ai_preview: true
+number
+No
+Yes (max = upper bound)
+e.g. quantity of a repeated element
+
+3.3 Validation Rules Enforced Server-Side on Schema Save
+key must be unique within a category's schema (used as the dictionary key in selected_attributes elsewhere in the system).
+select, color_swatch, image_swatch types must have at least 2 options.
+slider and number types must have min < max.
+toggle type must have a price_delta defined even if 0.
+display_order values should be unique per category (used purely for UI ordering; not database-enforced unique, but the admin UI should prevent collisions).
+4. Folder Structure (Flask)
+app/
+  models/
+    category.py
+    attribute_schema.py       — validation/shape helpers, not a separate DB model
+  services/
+    category_service.py       — CRUD, slug generation, ordering
+    attribute_schema_service.py — add/edit/reorder/delete attributes within a category
+  routes/
+    category_routes.py        — public
+    admin_category_routes.py  — admin CRUD + schema management
+  utils/
+    slug_helper.py            — slugify(name), collision handling (append -2, -3...)
+    schema_validator.py        — validates attribute_schema shape per rules above
+5. Price Delta Logic (Handoff Spec for Module 4)
+Category attributes are the source of price rules, but the actual price calculation engine lives in Module 4 (Configurator & Pricing). This module's job is only to store the rules correctly:
+For select / color_swatch / image_swatch / toggle: price impact = the price_delta of the chosen option (or the toggle's flat price_delta when on).
+For slider / number: price impact is not a flat delta — Module 4 needs a formula. Add an optional field to these attribute types:
+"price_formula": { "type": "linear", "rate_per_unit": 25, "base_included_units": 6 }
+e.g. size slider from 6–24 inches, first 6 inches included in base price, ₹25/inch beyond that. Keep this formula object simple (linear only for v1) — don't over-engineer; Asil can adjust rate_per_unit from the admin UI without needing new formula types.
+Coordination Note
+Coordinate directly with the Module 4 team before freezing this field — they are the consumer of it.
+6. API Contract
+Standard response shape throughout:
+{ "success": true, "message": "", "data": {} }
+{ "success": true, "data": [], "page":1, "limit":20, "total":0, "totalPages":0 }
+{ "success": false, "message": "", "errors": {} }
+6.1 Public Routes
+  GET     /api/categories
+Query: ?is_active=true (default true, admin can override via admin route instead)
+Success 200:
+{ "success": true, "data": [
+  { "_id","slug","name","cover_image","accent_color","short_tagline","display_order" }
+] }
+Note: attribute_schema is NOT included in the list view — keep it lightweight.
+Sorted by display_order ascending.
+
+  GET     /api/categories/:slug
+Success 200:
+{ "success": true, "data": {
+  "_id","slug","name","description","banner_image","accent_color",
+  "attribute_schema": [ ...full attribute objects, sorted by display_order... ],
+  "ai_prompt_template" — EXCLUDED from public response, internal only
+} }
+Code
+Error Condition
+404
+Category not found or inactive
+
+Security Note
+ai_prompt_template must be stripped from the public response — it's an internal prompt-engineering detail, not something that should be exposed in a public API payload (and could be used to manipulate AI prompt injection from the client side if leaked).
+6.2 Admin Routes (require @require_admin)
+  GET     /api/admin/categories
+Returns ALL categories including inactive ones, with full attribute_schema.
+Supports pagination.
+
+  POST     /api/admin/categories
+Body: { "name","description","short_tagline","cover_image","banner_image",
+        "accent_color","display_order","ai_prompt_template","seo":{} }
+- slug auto-generated from name server-side (not client-supplied)
+- attribute_schema starts as empty array [] — added via the dedicated endpoint below
+Success 201: { "success": true, "data": {...category...} }
+
+  PUT     /api/admin/categories/:id
+Body: any subset of category fields except slug and attribute_schema
+      (slug changes are dangerous — if ever needed, require explicit confirmation
+      in the frontend since it breaks existing links; attribute_schema has its
+      own endpoint to avoid huge accidental overwrites)
+Success 200: { "success": true, "data": {...} }
+
+  DELETE     /api/admin/categories/:id
+Rule: soft-delete only (set is_active: false), never hard-delete.
+Reason: products reference category_id — hard delete would orphan them.
+Block deletion (return 409) if the category still has active products;
+require admin to deactivate/reassign products first.
+
+  PUT     /api/admin/categories/:id/attribute-schema
+Body: { "attribute_schema": [ ...full array, replaces existing... ] }
+- This is a full-array replace, not a patch — simplest and safest for the
+  admin drag-and-drop schema builder UI to reason about.
+- Runs full schema_validator before saving; returns 400 with field-level
+  errors if any attribute fails validation.
+Success 200: { "success": true, "message": "Schema updated", "data": {...} }
+
+Important — Historical Data
+Changing or removing an attribute key that existing products' default_attributes or existing cart/order selected_attributes reference will NOT retroactively update those records (they're historical snapshots — see Module 3/6/8). Warn admin in the UI when removing a key that's in active use; don't block it, since Asil needs full control, but surface the warning.
+
+  PUT     /api/admin/categories/reorder
+Body: { "order": [ { "category_id", "display_order" }, ... ] }
+Bulk reorder endpoint for drag-and-drop category ordering in admin UI —
+avoids N individual PUT calls.
+7. Seed Data (for Other Teams to Develop Against Immediately)
+Ship 4 seeded categories matching the confirmed reference images, so Modules 3/4/5/6/7/8 and the frontend teams have real data to build against from day one instead of waiting:
+Neon Name Boards — attributes: Font (select), Color (color_swatch), Chain (toggle), Layer Cut (select), Shape Cut (select), Size (slider)
+Quilling Name Art — attributes: Frame Size (select), Base Color (color_swatch), Flower Density (select), Custom Text (text_input)
+Moonlight — attributes: Stand Style (image_swatch), Text/Photo Type (select), Size (slider), Engraving Text (text_input)
+Fridge Magnets — attributes: Character/Design (image_swatch), Size (select)
+
+Unblock Downstream Teams
+Provide these as a seed_categories.py script early — this unblocks every downstream team.
+8. What This Module Does NOT Do
+No product data (Module 3) — categories only define what can be configured, not the products themselves.
+No price calculation logic (Module 4) — this module stores price rules, doesn't compute totals.
+No AI image calls (Module 5) — this module only stores the prompt template string; Module 5 owns the actual generation call.
+No image upload handling of its own beyond receiving already-uploaded Cloudinary URLs — general media upload lives in Module 10's /api/admin/media/upload, reused here.
+9. Handoff Contract for Other Teams
+Treat as frozen from Day 1:
+category.attribute_schema[].key — the dictionary key used everywhere downstream (selected_attributes in cart/order items, default_attributes on products) must exactly match a key in the owning category's schema.
+category._id — referenced as category_id (ObjectId, stored as string in JSON) by Products, Cart, Orders, AI Generations.
+Public category detail response always includes the full, ordered attribute_schema — Modules 3/4/5/frontend should fetch this once per category page load and reuse it, not re-fetch per attribute interaction.
+accent_color field — frontend design system (dark neon theme) uses this to tint that category's pages; already defined enum values: neon_pink | neon_blue | neon_violet | neon_yellow, matching the palette in the project plan docx.

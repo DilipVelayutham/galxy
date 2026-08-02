@@ -10,6 +10,7 @@ import { Trash2, ShoppingBag, Plus, Minus, ArrowRight, Loader2, RefreshCw } from
 
 interface CartItem {
   id: string;
+  _id?: string;
   product_id: string;
   category_id: string;
   selected_attributes: Record<string, any>;
@@ -36,7 +37,11 @@ export default function CartPage() {
     try {
       const res = await api.get("/cart");
       if (res.success && res.data) {
-        setCartItems(res.data.items || []);
+        const items = (res.data.items || []).map((item: CartItem) => ({
+          ...item,
+          id: item._id || item.id
+        }));
+        setCartItems(items);
       }
     } catch {
       showToast("Error loading shopping cart", "error");

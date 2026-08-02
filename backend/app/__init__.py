@@ -118,12 +118,14 @@ def create_app(config_class=Config):
         if origin:
             allowed_origins_raw = app.config.get('CORS_ALLOWED_ORIGINS', '*')
             if allowed_origins_raw == '*':
-                response.headers['Access-Control-Allow-Origin'] = '*'
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Vary'] = 'Origin'
             else:
                 allowed_origins = [o.strip() for o in allowed_origins_raw.split(',') if o.strip()]
                 if origin in allowed_origins:
                     response.headers['Access-Control-Allow-Origin'] = origin
                     response.headers['Vary'] = 'Origin'
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
         response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
         return response

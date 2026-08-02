@@ -10,6 +10,7 @@ import Link from "next/link";
 
 interface CartItem {
   id: string;
+  _id?: string;
   product_id: string;
   selected_attributes: Record<string, any>;
   quantity: number;
@@ -46,7 +47,11 @@ export default function CheckoutPage() {
         try {
           const res = await api.get("/cart");
           if (res.success && res.data) {
-            setCartItems(res.data.items || []);
+            const items = (res.data.items || []).map((item: CartItem) => ({
+              ...item,
+              id: item._id || item.id
+            }));
+            setCartItems(items);
             
             // Pre-fill user profile shipping info if present
             const profileRes = await api.get("/auth/session"); // Refresh session user details
